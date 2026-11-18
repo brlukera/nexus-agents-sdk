@@ -124,7 +124,12 @@ def handle_request(req):
                 result = client.get_orderbook(pair=args.get("pair"))
             elif tool_name == "nexus_calculate_fee":
                 fee, net = client.calculate_house_fee(args["gross_amount"])
-                result = {"gross": args["gross_amount"], "protocol_fee_0_5_pct": fee, "net_payout": net}
+                result = {
+                    "gross": str(args["gross_amount"]),
+                    "protocol_fee_0_5_pct": str(fee),
+                    "net_payout": str(net),
+                    "currency_precision": "6-decimal USDC (RFC 8785)"
+                }
             elif tool_name == "nexus_sign_agreement":
                 sig = identity.sign_agreement_hash(args["agreement_hash"])
                 result = {"agreement_hash": args["agreement_hash"], "ed25519_signature": sig}
@@ -139,7 +144,7 @@ def handle_request(req):
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "content": [{"type": "text", "text": json.dumps(result, indent=2)}]
+                    "content": [{"type": "text", "text": json.dumps(result, indent=2, default=str)}]
                 }
             }
         except Exception as e:

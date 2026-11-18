@@ -10,7 +10,11 @@ Built for Autonomous AI Agents, Algorithmic Arbitrageurs & Data Oracles.
 Features:
 - Genuine Ed25519 cryptographic identity & request signing.
 - X25519 E2EE key derivation support.
-- Canonical JSON serialization (RFC 8785) for tamper-proof signatures.
+- Strict RFC 8785 Canonical JSON serialization (JCS) for tamper-proof signatures.
+- Anti-replay protection with nonce cache & 90s timestamp verification window.
+- Machine-grade Proof-of-Work (PoW) solver for protocol admission.
+- Secure keystore with optional AES-256-GCM password encryption.
+- Financial arithmetic in decimal.Decimal with 6 decimal places (USDC micro-units).
 - Farol Semântico discovery (A2A capabilities & orderbook).
 - Bilateral negotiation rooms & dual-signed contract formalization.
 - 0.5% protocol house fee validation.
@@ -22,33 +26,94 @@ import time
 import json
 import secrets
 import hashlib
+import threading
 import urllib.request
 import urllib.error
-from typing import Dict, Any, Optional, Tuple
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from typing import Dict, Any, Optional, Tuple, Union
 
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives.serialization import (
     Encoding, PublicFormat, PrivateFormat, NoEncryption
 )
-from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+from cryptography.exceptions import InvalidSignature, InvalidTag
 
 DEFAULT_GATEWAY = os.getenv("NEXUS_GATEWAY_URL", "http://127.0.0.1:3333")
 AUTH_WINDOW_SECONDS = 90
+USDC_PRECISION = Decimal('0.000001')
 
 
 # ============================================================================
-# 1. CANONICAL JSON & CRYPTOGRAPHIC AUTHENTICATION
+# 1. CANONICAL JSON (RFC 8785 / JCS) & CRYPTOGRAPHIC AUTHENTICATION
 # ============================================================================
+
+def _rfc8785_encode(val: Any) -> str:
+    """
+    RFC 8785 (JSON Canonicalization Scheme - JCS) recursive encoder.
+    Enforces:
+    1. Lexicographical sorting of object keys by UTF-16 code units (§3.2.3).
+    2. Deterministic whitespace rules (§3.2.1).
+    3. IEEE 754 number representation and rejection of NaN/Infinity (§3.2.2).
+    """
+    if val is None:
+        return "null"
+    elif isinstance(val, bool):
+        return "true" if val else "false"
+    elif isinstance(val, int):
+        return str(val)
+    elif isinstance(val, float):
+        if val != val or val == float('inf') or val == float('-inf'):
+            raise ValueError("NaN and Infinity are not permitted in RFC 8785 canonical JSON")
+        if val.is_integer():
+            return str(int(val))
+        return json.dumps(val)
+    elif isinstance(val, Decimal):
+        if val.is_nan() or val.is_infinite():
+            raise ValueError("NaN and Infinity are not permitted in RFC 8785 canonical JSON")
+        return str(val)
+    elif isinstance(val, str):
+        return json.dumps(val, ensure_ascii=False)
+    elif isinstance(val, (list, tuple)):
+        return "[" + ",".join(_rfc8785_encode(x) for x in val) + "]"
+    elif isinstance(val, dict):
+        # RFC 8785 §3.2.3: Keys must be sorted by UTF-16 code units
+        sorted_keys = sorted(val.keys(), key=lambda k: k.encode('utf-16-be'))
+        items = []
+        for k in sorted_keys:
+            if not isinstance(k, str):
+                raise TypeError(f"RFC 8785 dictionary keys must be strings, got {type(k)}")
+            k_json = json.dumps(k, ensure_ascii=False)
+            v_json = _rfc8785_encode(val[k])
+            items.append(f"{k_json}:{v_json}")
+        return "{" + ",".join(items) + "}"
+    else:
+        raise TypeError(f"RFC 8785 unsupported type: {type(val)}")
+
 
 def canonical_json(data: Any) -> bytes:
-    """Deterministic UTF-8 canonical JSON serialization (RFC 8785)."""
-    return json.dumps(
-        data,
-        sort_keys=True,
-        separators=(',', ':'),
-        ensure_ascii=False,
-        allow_nan=False
-    ).encode('utf-8')
+    """Deterministic UTF-8 canonical JSON serialization strictly compliant with RFC 8785."""
+    return _rfc8785_encode(data).encode('utf-8')
+
+
+# Anti-Replay TTL Nonce Cache
+_SEEN_NONCES: Dict[str, float] = {}
+_NONCE_LOCK = threading.Lock()
+
+
+def clear_replay_cache() -> None:
+    """Clears the local anti-replay cache (used for test suite isolation)."""
+    with _NONCE_LOCK:
+        _SEEN_NONCES.clear()
+
+
+def _purge_expired_nonces(now: float) -> None:
+    cutoff = now - AUTH_WINDOW_SECONDS
+    expired = [k for k, ts in _SEEN_NONCES.items() if ts < cutoff]
+    for k in expired:
+        _SEEN_NONCES.pop(k, None)
 
 
 def canonical_message(path: str, body: Dict[str, Any], agent_id: str, ts: int, nonce: str) -> bytes:
@@ -80,7 +145,10 @@ def sign_request(path: str, body: Dict[str, Any], agent_id: str, private_key: ed
 
 
 def verify_signature(path: str, body: Dict[str, Any], auth_claim: Dict[str, Any], pubkey_hex: str) -> bool:
-    """Verifies an Ed25519 signature against an expected public key."""
+    """
+    Verifies an Ed25519 signature against an expected public key.
+    Includes strict 90-second timestamp window and stateful anti-replay nonce cache.
+    """
     if not isinstance(auth_claim, dict):
         return False
     ts = auth_claim.get('ts')
@@ -94,19 +162,34 @@ def verify_signature(path: str, body: Dict[str, Any], auth_claim: Dict[str, Any]
         return False
     if not isinstance(signature, str) or len(signature) != 128:
         return False
+    if not isinstance(agent_id, str) or not agent_id:
+        return False
+
+    # Anti-Replay: Check if nonce was already presented within valid window
+    now = time.time()
+    nonce_key = f"{agent_id}:{nonce}"
+    with _NONCE_LOCK:
+        _purge_expired_nonces(now)
+        if nonce_key in _SEEN_NONCES:
+            return False  # REPLAY ATTACK BLOCKED: Nonce already used!
 
     try:
         raw_pubkey = bytes.fromhex(pubkey_hex)
         public_key = ed25519.Ed25519PublicKey.from_public_bytes(raw_pubkey)
         message = canonical_message(path, body, agent_id, ts, nonce)
         public_key.verify(bytes.fromhex(signature), message)
+
+        # Mark nonce as consumed
+        with _NONCE_LOCK:
+            _SEEN_NONCES[nonce_key] = now
+
         return True
     except (ValueError, InvalidSignature, TypeError):
         return False
 
 
 # ============================================================================
-# 2. AGENT CRYPTOGRAPHIC IDENTITY
+# 2. AGENT CRYPTOGRAPHIC IDENTITY & SECURE KEYSTORE
 # ============================================================================
 
 class AgentCryptoIdentity:
@@ -148,29 +231,115 @@ class AgentCryptoIdentity:
         hash_bytes = bytes.fromhex(agreement_hash)
         return self.ed_privkey.sign(hash_bytes).hex()
 
-    def save_keystore(self, filepath: str):
-        """Saves identity keys to an encrypted/protected local JSON file."""
-        data = {
-            "name": self.name,
-            "agent_id": self.agent_id,
-            "ed_privkey_hex": self.ed_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex(),
-            "x_privkey_hex": self.x_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex(),
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
+    def save_keystore(self, filepath: str, password: Optional[str] = None) -> None:
+        """
+        Saves identity keys to a local JSON keystore.
+        If password is provided, private keys are encrypted using AES-256-GCM
+        with key derivation via PBKDF2-HMAC-SHA256 (100,000 iterations).
+        If password is None, keys are saved unencrypted with explicit metadata.
+        """
+        ed_raw = self.ed_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
+        x_raw = self.x_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
+
+        if password:
+            salt = secrets.token_bytes(16)
+            nonce = secrets.token_bytes(12)
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=salt,
+                iterations=100_000
+            )
+            derived_key = kdf.derive(password.encode('utf-8'))
+            aesgcm = AESGCM(derived_key)
+            secret_payload = json.dumps({
+                "ed_privkey_hex": ed_raw,
+                "x_privkey_hex": x_raw
+            }).encode('utf-8')
+            ciphertext = aesgcm.encrypt(nonce, secret_payload, None)
+
+            keystore_data = {
+                "version": 2,
+                "encrypted": True,
+                "name": self.name,
+                "agent_id": self.agent_id,
+                "ed_pubkey_hex": self.ed_pubkey_hex,
+                "x_pubkey_hex": self.x_pubkey_hex,
+                "kdf": {
+                    "algorithm": "PBKDF2-HMAC-SHA256",
+                    "iterations": 100_000,
+                    "salt": salt.hex()
+                },
+                "cipher": {
+                    "algorithm": "AES-256-GCM",
+                    "nonce": nonce.hex(),
+                    "ciphertext": ciphertext.hex()
+                },
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+        else:
+            keystore_data = {
+                "version": 2,
+                "encrypted": False,
+                "name": self.name,
+                "agent_id": self.agent_id,
+                "ed_pubkey_hex": self.ed_pubkey_hex,
+                "x_pubkey_hex": self.x_pubkey_hex,
+                "ed_privkey_hex": ed_raw,
+                "x_privkey_hex": x_raw,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            json.dump(keystore_data, f, indent=2)
+
         try:
             os.chmod(filepath, 0o600)
         except Exception:
             pass
 
     @classmethod
-    def load_keystore(cls, filepath: str) -> 'AgentCryptoIdentity':
-        """Loads an existing identity from a local keystore file."""
+    def load_keystore(cls, filepath: str, password: Optional[str] = None) -> 'AgentCryptoIdentity':
+        """
+        Loads an agent identity from a local keystore file.
+        Decrypts private keys using AES-256-GCM if password-protected.
+        """
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
-        ed_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(data["ed_privkey_hex"]))
-        x_key = x25519.X25519PrivateKey.from_private_bytes(bytes.fromhex(data["x_privkey_hex"]))
+
+        is_encrypted = data.get("encrypted", False)
+        if is_encrypted:
+            if not password:
+                raise ValueError("Keystore is password-encrypted; password is required to decrypt.")
+
+            kdf_info = data.get("kdf", {})
+            cipher_info = data.get("cipher", {})
+            salt = bytes.fromhex(kdf_info["salt"])
+            iterations = kdf_info.get("iterations", 100_000)
+            nonce = bytes.fromhex(cipher_info["nonce"])
+            ciphertext = bytes.fromhex(cipher_info["ciphertext"])
+
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=salt,
+                iterations=iterations
+            )
+            derived_key = kdf.derive(password.encode('utf-8'))
+            aesgcm = AESGCM(derived_key)
+            try:
+                decrypted_bytes = aesgcm.decrypt(nonce, ciphertext, None)
+                secrets_dict = json.loads(decrypted_bytes.decode('utf-8'))
+                ed_raw_hex = secrets_dict["ed_privkey_hex"]
+                x_raw_hex = secrets_dict["x_privkey_hex"]
+            except (InvalidTag, Exception):
+                raise ValueError("Invalid password or corrupt keystore data.")
+        else:
+            ed_raw_hex = data["ed_privkey_hex"]
+            x_raw_hex = data["x_privkey_hex"]
+
+        ed_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(ed_raw_hex))
+        x_key = x25519.X25519PrivateKey.from_private_bytes(bytes.fromhex(x_raw_hex))
         ident = cls(data["name"], ed_privkey=ed_key, x_privkey=x_key)
         ident.agent_id = data.get("agent_id")
         return ident
@@ -217,38 +386,45 @@ class NexusClient:
         except urllib.error.URLError as e:
             raise ConnectionError(f"Cannot reach Nexus Gateway at {url}: {e}")
 
-    def solve_pow(self, stage1: Dict[str, Any]) -> int:
-        """Solves the cryptographic Proof-of-Machine challenge within SLA (<850ms)."""
-        bits = stage1.get('challenge', {}).get('difficulty_bits', 12)
-        sid = stage1.get('session_id', '')
-        salt = stage1.get('challenge', {}).get('salt', '')
-        
-        for counter in range(2_000_000):
-            d = hashlib.sha256(f"nexus3|{sid}|{salt}|{counter}".encode('utf-8')).digest()
-            if int.from_bytes(d, 'big') >> (256 - bits) == 0:
-                return counter
-        raise RuntimeError("PoW solution exceeded search boundary.")
+    def solve_pow(self, challenge_resp: Dict[str, Any]) -> str:
+        """
+        Solves the cryptographic Proof-of-Machine challenge within SLA (<850ms).
+        Handles both:
+        1. Difficulty-bits Hashcash challenge (difficulty_bits >= 8).
+        2. High-throughput Bytecode ACK evaluation (opcode == '0x534841323536_BYTECODE_EVAL').
+        """
+        ch = challenge_resp.get('challenge', {})
+        bits = ch.get('difficulty_bits') or challenge_resp.get('difficulty_bits')
+        sid = challenge_resp.get('session_id') or challenge_resp.get('c_id', '')
+        salt = ch.get('salt') or challenge_resp.get('salt', '')
+
+        if bits:
+            for counter in range(2_000_000):
+                d = hashlib.sha256(f"nexus3|{sid}|{salt}|{counter}".encode('utf-8')).digest()
+                if int.from_bytes(d, 'big') >> (256 - int(bits)) == 0:
+                    return str(counter)
+            raise RuntimeError("PoW solution exceeded search boundary.")
+
+        # Bytecode ACK challenge calculation
+        return hashlib.sha256(f"{salt}_MACHINE_ACK".encode('utf-8')).hexdigest()[:12]
 
     def handshake(self, name: Optional[str] = None, specialty: str = "AI_INFERENCE_ORACLE") -> str:
         """
         Executes formal agent admission into the protocol:
-        1. Requests Proof-of-Machine challenge.
-        2. Solves PoW and binds real Ed25519 public key.
-        3. Obtains verified agent_id on Farol Semântico.
+        1. Requests Proof-of-Machine challenge from the Gateway.
+        2. Solves PoW via self.solve_pow() within SLA window.
+        3. Enrolls with authentic Ed25519 & X25519 public keys.
+        4. Obtains verified agent_id on Farol Semântico.
         """
         if name:
             self.identity.name = name
 
         challenge_resp = self._http_request("GET", "/api/gate/challenge")
-        
-        # Verify challenge structure
         c_id = challenge_resp.get("c_id") or challenge_resp.get("session_id")
-        salt = challenge_resp.get("salt") or challenge_resp.get("challenge", {}).get("salt", "")
 
-        # Compute PoW solution
-        solution = hashlib.sha256(f"{salt}_MACHINE_ACK".encode('utf-8')).hexdigest()[:12]
+        # Genuine Proof-of-Machine invocation
+        solution = self.solve_pow(challenge_resp)
 
-        # Enrolls with authentic Ed25519 and X25519 public keys
         enroll_body = {
             "c_id": c_id,
             "solution": solution,
@@ -292,7 +468,7 @@ class NexusClient:
         """
         if not self.agent_id:
             raise ValueError("Agent must be handshaked.")
-        
+
         body = {
             "agent_id": self.agent_id,
             "room_id": room_id,
@@ -310,7 +486,7 @@ class NexusClient:
         """
         if not self.agent_id:
             raise ValueError("Agent must be handshaked.")
-        
+
         body = {
             "agent_id": self.agent_id,
             "room_id": room_id,
@@ -320,13 +496,41 @@ class NexusClient:
         return self._http_request("POST", "/api/rooms/accept", body, sign=True)
 
     @staticmethod
-    def calculate_house_fee(gross_amount: float, fee_bps: int = 50) -> Tuple[float, float]:
+    def calculate_house_fee(
+        gross_amount: Union[Decimal, float, str, int],
+        fee_bps: int = 50,
+        max_amount: Optional[Union[Decimal, float, str, int]] = 5000
+    ) -> Tuple[Decimal, Decimal]:
         """
-        Calculates protocol commission and net counterparty payout.
-        Standard fee_bps = 50 (0.5%).
-        Returns: (house_fee, net_amount)
+        Calculates protocol commission and net counterparty payout with strict
+        6-decimal USDC precision (micro-unit accuracy) using decimal.Decimal.
+
+        Default fee_bps = 50 (0.50% / 50 basis points).
+
+        Validations:
+        - gross_amount must be strictly positive (> 0).
+        - gross_amount must not exceed max_amount ceiling (default $5,000 USDC).
+        - fee_bps must be between 0 and 10,000 (0% to 100%).
+
+        Returns: (house_fee, net_amount) as Decimals rounded with ROUND_HALF_UP.
         """
-        fee_rate = fee_bps / 10000.0
-        house_fee = round(gross_amount * fee_rate, 4)
-        net_amount = round(gross_amount - house_fee, 4)
+        try:
+            gross = Decimal(str(gross_amount))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValueError(f"Invalid gross_amount: {gross_amount}")
+
+        if gross <= Decimal('0'):
+            raise ValueError(f"Gross amount must be strictly positive (> 0), got: {gross}")
+
+        if max_amount is not None:
+            max_d = Decimal(str(max_amount))
+            if gross > max_d:
+                raise ValueError(f"Gross amount {gross} exceeds protocol ceiling of {max_d} USDC")
+
+        if not isinstance(fee_bps, int) or fee_bps < 0 or fee_bps > 10000:
+            raise ValueError(f"Invalid fee_bps: {fee_bps}. Must be an integer between 0 and 10000.")
+
+        fee_rate = Decimal(fee_bps) / Decimal(10000)
+        house_fee = (gross * fee_rate).quantize(USDC_PRECISION, rounding=ROUND_HALF_UP)
+        net_amount = (gross - house_fee).quantize(USDC_PRECISION, rounding=ROUND_HALF_UP)
         return house_fee, net_amount

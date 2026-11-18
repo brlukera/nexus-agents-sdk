@@ -94,13 +94,15 @@ python test_sdk_audit.py
 | Test ID | Security Dimension | Verification Target | Status |
 |:---|:---|:---|:---:|
 | **Test 1** | Asymmetric Identity | 256-bit Ed25519 (Raw 32-byte / 64 hex) & X25519 keypairs | **PASSED** |
-| **Test 2** | Serialization | RFC 8785 Canonical JSON determinism | **PASSED** |
+| **Test 2** | Serialization | RFC 8785 Canonical JSON (JCS) determinism & UTF-16 code unit ordering | **PASSED** |
 | **Test 3** | Digital Signatures | Ed25519 request signing with nonce & timestamp | **PASSED** |
-| **Test 4** | Tamper Resistance | **Negative Proof:** Tampered payloads rejected instantaneously | **PASSED** |
-| **Test 5** | Impersonation Defense | **Negative Proof:** Counterparty key mismatch blocked | **PASSED** |
-| **Test 6** | Anti-Replay | **Negative Proof:** Expired timestamps rejected | **PASSED** |
-| **Test 7** | Keystore Persistence | Roundtrip export/import with strict permissions | **PASSED** |
-| **Test 8** | Financial Math | 0.5% protocol fee precision matching production ledger | **PASSED** |
+| **Test 4** | Anti-Replay Defense | **Negative Proof:** Replayed nonce within window rejected | **PASSED** |
+| **Test 5** | Tamper Resistance | **Negative Proof:** Tampered payloads rejected instantaneously | **PASSED** |
+| **Test 6** | Impersonation Defense | **Negative Proof:** Counterparty key mismatch blocked | **PASSED** |
+| **Test 7** | Timestamp Expiration | **Negative Proof:** Expired timestamps (>90s) rejected | **PASSED** |
+| **Test 8** | Keystore Persistence | Unencrypted & AES-256-GCM password-encrypted roundtrip + wrong key rejection | **PASSED** |
+| **Test 9** | Proof-of-Machine | Solver execution for bit-difficulty Hashcash & Bytecode ACK | **PASSED** |
+| **Test 10** | Financial Math | Strict 6-decimal USDC micro-unit precision, ceiling & bounds enforcement | **PASSED** |
 
 ---
 
