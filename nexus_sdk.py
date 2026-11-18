@@ -10,11 +10,16 @@ Built for Autonomous AI Agents, Algorithmic Arbitrageurs & Data Oracles.
 Features:
 - Genuine Ed25519 cryptographic identity & request signing.
 - X25519 E2EE key derivation support.
-- Strict RFC 8785 Canonical JSON serialization (JCS) with official vector compliance.
+- Strict RFC 8785 Canonical JSON serialization (JCS) with full numeric compliance:
+  * UTF-16 code unit ordering (§3.2.3)
+  * Safe integer boundary [-(2^53-1), 2^53-1] (§3.2.2)
+  * IEEE 754 float exponent formatting without leading zeros (§3.2.2.3)
+  * Rejection of NaN, Infinity, and non-JSON data types (Decimal)
 - Thread-safe atomic anti-replay protection (concurrency race-free & DoS resilient).
 - Machine-grade Proof-of-Work (PoW) solver for protocol admission.
-- Secure keystore with optional AES-256-GCM password encryption.
-- Financial arithmetic in decimal.Decimal with 6 decimal places (USDC micro-units).
+- Hardened keystore with mandatory AES-256-GCM encryption & PBKDF2 (600,000 rounds).
+- Cross-platform strict file permissions (POSIX 0600 & Windows NTFS ACLs).
+- Financial arithmetic in decimal.Decimal with strict 6-decimal USDC micro-units.
 - Farol Semântico discovery (A2A capabilities & orderbook).
 - Bilateral negotiation rooms & dual-signed contract formalization.
 - 0.5% protocol house fee validation.
@@ -22,11 +27,14 @@ Features:
 
 import os
 import sys
+import re
 import time
 import json
 import secrets
 import hashlib
 import threading
+import platform
+import subprocess
 import urllib.request
 import urllib.error
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
@@ -45,6 +53,11 @@ DEFAULT_GATEWAY = os.getenv("NEXUS_GATEWAY_URL", "http://127.0.0.1:3333")
 AUTH_WINDOW_SECONDS = 90
 USDC_PRECISION = Decimal('0.000001')
 
+# RFC 8785 Safe Integer Boundaries (IEEE 754 Number.MAX_SAFE_INTEGER)
+JCS_MAX_SAFE_INT = 9007199254740991   # 2**53 - 1
+JCS_MIN_SAFE_INT = -9007199254740991  # -(2**53 - 1)
+PBKDF2_RECOMMENDED_ITERATIONS = 600_000  # OWASP baseline for PBKDF2-HMAC-SHA256
+
 
 # ============================================================================
 # 1. CANONICAL JSON (RFC 8785 / JCS) & CRYPTOGRAPHIC AUTHENTICATION
@@ -57,25 +70,34 @@ def _rfc8785_encode(val: Any) -> str:
     1. Lexicographical sorting of object keys by UTF-16 code units (§3.2.3).
     2. Deterministic whitespace rules (§3.2.1).
     3. IEEE 754 number representation and rejection of NaN/Infinity (§3.2.2).
+    4. Strict safe integer boundary [-9007199254740991, 9007199254740991] (§3.2.2).
+    5. No leading zeros in exponents (e.g. 1e-7 instead of 1e-07) (§3.2.2.3).
+    6. Rejection of non-standard JSON types (e.g. Decimal must be serialized as str/int/float).
     """
     if val is None:
         return "null"
     elif isinstance(val, bool):
         return "true" if val else "false"
     elif isinstance(val, int):
+        if val < JCS_MIN_SAFE_INT or val > JCS_MAX_SAFE_INT:
+            raise ValueError(f"Integer {val} exceeds RFC 8785 safe integer boundary [-(2^53-1), 2^53-1]")
         return str(val)
     elif isinstance(val, float):
         if val != val or val == float('inf') or val == float('-inf'):
             raise ValueError("NaN and Infinity are not permitted in RFC 8785 canonical JSON")
         if val == 0.0:
             return "0"
-        if val.is_integer():
+        if val.is_integer() and JCS_MIN_SAFE_INT <= int(val) <= JCS_MAX_SAFE_INT:
             return str(int(val))
-        return json.dumps(val)
+        s = json.dumps(val)
+        # RFC 8785 §3.2.2.3: Exponent must not have leading zeros (e.g. 1e-7, not 1e-07)
+        s = re.sub(r'e([+-])0+(\d+)', r'e\1\2', s)
+        return s
     elif isinstance(val, Decimal):
-        if val.is_nan() or val.is_infinite():
-            raise ValueError("NaN and Infinity are not permitted in RFC 8785 canonical JSON")
-        return str(val)
+        raise TypeError(
+            "Decimal is not a native RFC 8785 JSON data type. "
+            "Convert financial amounts to strings (e.g. '100.000000') or safe numbers before canonicalization."
+        )
     elif isinstance(val, str):
         return json.dumps(val, ensure_ascii=False)
     elif isinstance(val, (list, tuple)):
@@ -206,6 +228,26 @@ def verify_signature(path: str, body: Dict[str, Any], auth_claim: Dict[str, Any]
 # 2. AGENT CRYPTOGRAPHIC IDENTITY & SECURE KEYSTORE
 # ============================================================================
 
+def _secure_file_permissions(filepath: str) -> None:
+    """Sets strict owner-only read/write permissions on POSIX (0600) and Windows NTFS ACLs."""
+    try:
+        os.chmod(filepath, 0o600)
+    except Exception:
+        pass
+    if platform.system() == "Windows":
+        try:
+            user = os.environ.get("USERNAME")
+            if user:
+                subprocess.run(
+                    ["icacls", filepath, "/inheritance:r", "/grant:r", f"{user}:(R,W)"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False
+                )
+        except Exception:
+            pass
+
+
 class AgentCryptoIdentity:
     """
     Cryptographic Identity for an Autonomous AI Agent.
@@ -245,112 +287,98 @@ class AgentCryptoIdentity:
         hash_bytes = bytes.fromhex(agreement_hash)
         return self.ed_privkey.sign(hash_bytes).hex()
 
-    def save_keystore(self, filepath: str, password: Optional[str] = None) -> None:
+    def save_keystore(self, filepath: str, password: str, iterations: int = PBKDF2_RECOMMENDED_ITERATIONS) -> None:
         """
-        Saves identity keys to a local JSON keystore.
-        If password is provided, private keys are encrypted using AES-256-GCM
-        with key derivation via PBKDF2-HMAC-SHA256 (100,000 iterations).
-        If password is None, keys are saved unencrypted with explicit metadata.
+        Saves identity keys to a hardened, encrypted local JSON keystore.
+        MANDATORY: A non-empty password (min 8 chars) is required.
+        Private keys are encrypted using AES-256-GCM derived via PBKDF2-HMAC-SHA256 (600,000 iterations).
+        Unencrypted private key storage is strictly prohibited.
         """
+        if not password or not isinstance(password, str) or len(password.strip()) < 8:
+            raise ValueError("A secure password (minimum 8 characters) is required to encrypt the agent keystore.")
+
         ed_raw = self.ed_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
         x_raw = self.x_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
 
-        if password:
-            salt = secrets.token_bytes(16)
-            nonce = secrets.token_bytes(12)
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=salt,
-                iterations=100_000
-            )
-            derived_key = kdf.derive(password.encode('utf-8'))
-            aesgcm = AESGCM(derived_key)
-            secret_payload = json.dumps({
-                "ed_privkey_hex": ed_raw,
-                "x_privkey_hex": x_raw
-            }).encode('utf-8')
-            ciphertext = aesgcm.encrypt(nonce, secret_payload, None)
+        salt = secrets.token_bytes(16)
+        nonce = secrets.token_bytes(12)
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=iterations
+        )
+        derived_key = kdf.derive(password.encode('utf-8'))
+        aesgcm = AESGCM(derived_key)
+        secret_payload = json.dumps({
+            "ed_privkey_hex": ed_raw,
+            "x_privkey_hex": x_raw
+        }).encode('utf-8')
+        ciphertext = aesgcm.encrypt(nonce, secret_payload, None)
 
-            keystore_data = {
-                "version": 2,
-                "encrypted": True,
-                "name": self.name,
-                "agent_id": self.agent_id,
-                "ed_pubkey_hex": self.ed_pubkey_hex,
-                "x_pubkey_hex": self.x_pubkey_hex,
-                "kdf": {
-                    "algorithm": "PBKDF2-HMAC-SHA256",
-                    "iterations": 100_000,
-                    "salt": salt.hex()
-                },
-                "cipher": {
-                    "algorithm": "AES-256-GCM",
-                    "nonce": nonce.hex(),
-                    "ciphertext": ciphertext.hex()
-                },
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            }
-        else:
-            keystore_data = {
-                "version": 2,
-                "encrypted": False,
-                "name": self.name,
-                "agent_id": self.agent_id,
-                "ed_pubkey_hex": self.ed_pubkey_hex,
-                "x_pubkey_hex": self.x_pubkey_hex,
-                "ed_privkey_hex": ed_raw,
-                "x_privkey_hex": x_raw,
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            }
+        keystore_data = {
+            "version": 2,
+            "encrypted": True,
+            "name": self.name,
+            "agent_id": self.agent_id,
+            "ed_pubkey_hex": self.ed_pubkey_hex,
+            "x_pubkey_hex": self.x_pubkey_hex,
+            "kdf": {
+                "algorithm": "PBKDF2-HMAC-SHA256",
+                "iterations": iterations,
+                "salt": salt.hex()
+            },
+            "cipher": {
+                "algorithm": "AES-256-GCM",
+                "nonce": nonce.hex(),
+                "ciphertext": ciphertext.hex()
+            },
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        }
 
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(keystore_data, f, indent=2)
 
-        try:
-            os.chmod(filepath, 0o600)
-        except Exception:
-            pass
+        _secure_file_permissions(filepath)
 
     @classmethod
-    def load_keystore(cls, filepath: str, password: Optional[str] = None) -> 'AgentCryptoIdentity':
+    def load_keystore(cls, filepath: str, password: str) -> 'AgentCryptoIdentity':
         """
         Loads an agent identity from a local keystore file.
-        Decrypts private keys using AES-256-GCM if password-protected.
+        Decrypts private keys using AES-256-GCM.
         """
+        if not password or not isinstance(password, str):
+            raise ValueError("Password is required to decrypt keystore.")
+
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         is_encrypted = data.get("encrypted", False)
-        if is_encrypted:
-            if not password:
-                raise ValueError("Keystore is password-encrypted; password is required to decrypt.")
+        if not is_encrypted:
+            raise ValueError("Insecure unencrypted keystore format rejected. Encrypted keystore required.")
 
-            kdf_info = data.get("kdf", {})
-            cipher_info = data.get("cipher", {})
-            salt = bytes.fromhex(kdf_info["salt"])
-            iterations = kdf_info.get("iterations", 100_000)
-            nonce = bytes.fromhex(cipher_info["nonce"])
-            ciphertext = bytes.fromhex(cipher_info["ciphertext"])
+        kdf_info = data.get("kdf", {})
+        cipher_info = data.get("cipher", {})
+        salt = bytes.fromhex(kdf_info["salt"])
+        iterations = kdf_info.get("iterations", PBKDF2_RECOMMENDED_ITERATIONS)
+        nonce = bytes.fromhex(cipher_info["nonce"])
+        ciphertext = bytes.fromhex(cipher_info["ciphertext"])
 
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=salt,
-                iterations=iterations
-            )
-            derived_key = kdf.derive(password.encode('utf-8'))
-            aesgcm = AESGCM(derived_key)
-            try:
-                decrypted_bytes = aesgcm.decrypt(nonce, ciphertext, None)
-                secrets_dict = json.loads(decrypted_bytes.decode('utf-8'))
-                ed_raw_hex = secrets_dict["ed_privkey_hex"]
-                x_raw_hex = secrets_dict["x_privkey_hex"]
-            except (InvalidTag, Exception):
-                raise ValueError("Invalid password or corrupt keystore data.")
-        else:
-            ed_raw_hex = data["ed_privkey_hex"]
-            x_raw_hex = data["x_privkey_hex"]
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=iterations
+        )
+        derived_key = kdf.derive(password.encode('utf-8'))
+        aesgcm = AESGCM(derived_key)
+        try:
+            decrypted_bytes = aesgcm.decrypt(nonce, ciphertext, None)
+            secrets_dict = json.loads(decrypted_bytes.decode('utf-8'))
+            ed_raw_hex = secrets_dict["ed_privkey_hex"]
+            x_raw_hex = secrets_dict["x_privkey_hex"]
+        except (InvalidTag, Exception):
+            raise ValueError("Invalid password or corrupt keystore data.")
 
         ed_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(ed_raw_hex))
         x_key = x25519.X25519PrivateKey.from_private_bytes(bytes.fromhex(x_raw_hex))
@@ -383,7 +411,7 @@ class NexusClient:
         body_bytes = json.dumps(payload).encode('utf-8') if payload else None
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "NexusSDK-Py/2.0-Ed25519"
+            "User-Agent": "NexusSDK-Py/2.0.1-Ed25519"
         }
 
         req = urllib.request.Request(url, data=body_bytes, headers=headers, method=method)
@@ -521,28 +549,41 @@ class NexusClient:
 
         Default fee_bps = 50 (0.50% / 50 basis points).
 
-        Validations:
-        - gross_amount must be strictly positive (> 0).
+        Strict Validations:
+        - fee_bps must be an integer between 0 and 10,000 (booleans rejected).
+        - gross_amount must be strictly positive (> 0) and not boolean.
+        - gross_amount must not be NaN, Infinity, or non-numeric.
+        - gross_amount must not exceed 6 decimal places (USDC native precision).
         - gross_amount must not exceed max_amount ceiling (default $5,000 USDC).
-        - fee_bps must be between 0 and 10,000 (0% to 100%).
 
         Returns: (house_fee, net_amount) as Decimals rounded with ROUND_HALF_UP.
         """
+        if isinstance(fee_bps, bool) or not isinstance(fee_bps, int) or fee_bps < 0 or fee_bps > 10000:
+            raise ValueError(f"Invalid fee_bps: {fee_bps}. Must be an integer between 0 and 10000.")
+
+        if isinstance(gross_amount, bool):
+            raise ValueError("Invalid gross_amount: boolean is not a valid currency amount.")
+
         try:
             gross = Decimal(str(gross_amount))
         except (InvalidOperation, TypeError, ValueError):
-            raise ValueError(f"Invalid gross_amount: {gross_amount}")
+            raise ValueError(f"Invalid gross_amount: {gross_amount}. Numerical string, int, or float required.")
+
+        if gross.is_nan() or gross.is_infinite():
+            raise ValueError(f"Invalid gross_amount: {gross_amount}. NaN and Infinity are strictly prohibited.")
 
         if gross <= Decimal('0'):
             raise ValueError(f"Gross amount must be strictly positive (> 0), got: {gross}")
+
+        # Validate maximum 6 decimal places (USDC micro-unit precision)
+        normalized = gross.normalize() if gross != Decimal('0') else gross
+        if normalized.as_tuple().exponent < -6:
+            raise ValueError(f"Gross amount {gross_amount} exceeds USDC precision (maximum 6 decimal places permitted).")
 
         if max_amount is not None:
             max_d = Decimal(str(max_amount))
             if gross > max_d:
                 raise ValueError(f"Gross amount {gross} exceeds protocol ceiling of {max_d} USDC")
-
-        if not isinstance(fee_bps, int) or fee_bps < 0 or fee_bps > 10000:
-            raise ValueError(f"Invalid fee_bps: {fee_bps}. Must be an integer between 0 and 10000.")
 
         fee_rate = Decimal(fee_bps) / Decimal(10000)
         house_fee = (gross * fee_rate).quantize(USDC_PRECISION, rounding=ROUND_HALF_UP)
