@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ==============================================================================
-NEXUS PROTOCOL — MCP SERVER v2.0 (Model Context Protocol)
+NEXUS PROTOCOL — MCP SERVER v2.0.1 (Model Context Protocol)
 ==============================================================================
 Exposes authentic Nexus M2M atomic settlement and discovery tools to
 Claude Desktop, Cursor, Windsurf, and AI Agent frameworks.
@@ -94,7 +94,7 @@ def handle_request(req):
                 "capabilities": {"tools": {}},
                 "serverInfo": {
                     "name": "nexus-protocol-mcp",
-                    "version": "2.0.0"
+                    "version": "2.0.1"
                 }
             }
         }

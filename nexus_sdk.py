@@ -10,14 +10,15 @@ Built for Autonomous AI Agents, Algorithmic Arbitrageurs & Data Oracles.
 Features:
 - Genuine Ed25519 cryptographic identity & request signing.
 - X25519 E2EE key derivation support.
-- Strict RFC 8785 Canonical JSON serialization (JCS) with full numeric compliance:
+- Full ECMAScript 7.1.12.1 ToString(Number) & RFC 8785 Canonical JSON (JCS):
+  * Exact scientific exponent formatting (1e-7, 1e21) without leading zeros
+  * Fixed-point decimal formatting for 1e-6 (0.000001) and 1e20 (100000000000000000000)
   * UTF-16 code unit ordering (§3.2.3)
   * Safe integer boundary [-(2^53-1), 2^53-1] (§3.2.2)
-  * IEEE 754 float exponent formatting without leading zeros (§3.2.2.3)
   * Rejection of NaN, Infinity, and non-JSON data types (Decimal)
 - Thread-safe atomic anti-replay protection (concurrency race-free & DoS resilient).
 - Machine-grade Proof-of-Work (PoW) solver for protocol admission.
-- Hardened keystore with mandatory AES-256-GCM encryption & PBKDF2 (600,000 rounds).
+- Hardened keystore with mandatory AES-256-GCM encryption & PBKDF2 (min 600,000 rounds).
 - Cross-platform strict file permissions (POSIX 0600 & Windows NTFS ACLs).
 - Financial arithmetic in decimal.Decimal with strict 6-decimal USDC micro-units.
 - Farol Semântico discovery (A2A capabilities & orderbook).
@@ -28,6 +29,7 @@ Features:
 import os
 import sys
 import re
+import math
 import time
 import json
 import secrets
@@ -56,12 +58,80 @@ USDC_PRECISION = Decimal('0.000001')
 # RFC 8785 Safe Integer Boundaries (IEEE 754 Number.MAX_SAFE_INTEGER)
 JCS_MAX_SAFE_INT = 9007199254740991   # 2**53 - 1
 JCS_MIN_SAFE_INT = -9007199254740991  # -(2**53 - 1)
-PBKDF2_RECOMMENDED_ITERATIONS = 600_000  # OWASP baseline for PBKDF2-HMAC-SHA256
+MIN_PBKDF2_ITERATIONS = 600_000       # OWASP baseline for PBKDF2-HMAC-SHA256
+PBKDF2_RECOMMENDED_ITERATIONS = 600_000
 
 
 # ============================================================================
 # 1. CANONICAL JSON (RFC 8785 / JCS) & CRYPTOGRAPHIC AUTHENTICATION
 # ============================================================================
+
+def _format_ecmascript_number(val: float) -> str:
+    """
+    Exact ECMAScript 7.1.12.1 ToString(Number) implementation.
+    Strictly compliant with RFC 8785 §3.2.2.3 across all boundary ranges:
+    - -6 < n <= 21: fixed-point decimal format (e.g. 1e-6 -> "0.000001", 1e20 -> "100000000000000000000")
+    - n <= -6 or n > 21: exponential notation without leading zeros (e.g. 1e-7 -> "1e-7", 1e21 -> "1e+21")
+    - -0.0 and +0.0 -> "0"
+    - Rejection of NaN and Infinity
+    """
+    if math.isnan(val) or math.isinf(val):
+        raise ValueError("NaN and Infinity are not permitted in RFC 8785 canonical JSON")
+    if val == 0.0:
+        return "0"
+    if val < 0:
+        return "-" + _format_ecmascript_number(-val)
+
+    # Float integers below 1e21 are serialized without decimal point or exponent
+    if val.is_integer() and val < 1e21:
+        return str(int(val))
+
+    # Use Python's shortest round-trip float repr (David Gay dtoa)
+    s = repr(val)
+
+    if 'e' in s or 'E' in s:
+        mantissa_str, exp_str = re.split(r'[eE]', s)
+        exp = int(exp_str)
+    else:
+        mantissa_str, exp = s, 0
+
+    if '.' in mantissa_str:
+        int_part, frac_part = mantissa_str.split('.')
+        if int_part == '0':
+            num_zeros = len(frac_part) - len(frac_part.lstrip('0'))
+            digits = frac_part.lstrip('0')
+            n = -num_zeros + exp
+        else:
+            digits = int_part + frac_part
+            n = len(int_part) + exp
+    else:
+        digits = mantissa_str.lstrip('0')
+        n = len(digits) + exp
+
+    k = len(digits)
+
+    # 1. If k <= n <= 21:
+    if k <= n <= 21:
+        return digits + "0" * (n - k)
+
+    # 2. If 0 < n <= 21 (and n < k):
+    if 0 < n <= 21:
+        return digits[:n] + "." + digits[n:]
+
+    # 3. If -6 < n <= 0:
+    if -6 < n <= 0:
+        return "0." + "0" * (-n) + digits
+
+    # 4. Otherwise (n <= -6 or n > 21): exponential notation
+    if k == 1:
+        m = digits
+    else:
+        m = digits[0] + "." + digits[1:]
+
+    exp_val = n - 1
+    exp_sign = "+" if exp_val >= 0 else "-"
+    return f"{m}e{exp_sign}{abs(exp_val)}"
+
 
 def _rfc8785_encode(val: Any) -> str:
     """
@@ -69,10 +139,9 @@ def _rfc8785_encode(val: Any) -> str:
     Enforces:
     1. Lexicographical sorting of object keys by UTF-16 code units (§3.2.3).
     2. Deterministic whitespace rules (§3.2.1).
-    3. IEEE 754 number representation and rejection of NaN/Infinity (§3.2.2).
+    3. Exact ECMAScript 7.1.12.1 number representation (§3.2.2.3).
     4. Strict safe integer boundary [-9007199254740991, 9007199254740991] (§3.2.2).
-    5. No leading zeros in exponents (e.g. 1e-7 instead of 1e-07) (§3.2.2.3).
-    6. Rejection of non-standard JSON types (e.g. Decimal must be serialized as str/int/float).
+    5. Rejection of non-standard JSON types (e.g. Decimal must be serialized as str/int/float).
     """
     if val is None:
         return "null"
@@ -83,16 +152,7 @@ def _rfc8785_encode(val: Any) -> str:
             raise ValueError(f"Integer {val} exceeds RFC 8785 safe integer boundary [-(2^53-1), 2^53-1]")
         return str(val)
     elif isinstance(val, float):
-        if val != val or val == float('inf') or val == float('-inf'):
-            raise ValueError("NaN and Infinity are not permitted in RFC 8785 canonical JSON")
-        if val == 0.0:
-            return "0"
-        if val.is_integer() and JCS_MIN_SAFE_INT <= int(val) <= JCS_MAX_SAFE_INT:
-            return str(int(val))
-        s = json.dumps(val)
-        # RFC 8785 §3.2.2.3: Exponent must not have leading zeros (e.g. 1e-7, not 1e-07)
-        s = re.sub(r'e([+-])0+(\d+)', r'e\1\2', s)
-        return s
+        return _format_ecmascript_number(val)
     elif isinstance(val, Decimal):
         raise TypeError(
             "Decimal is not a native RFC 8785 JSON data type. "
@@ -291,11 +351,14 @@ class AgentCryptoIdentity:
         """
         Saves identity keys to a hardened, encrypted local JSON keystore.
         MANDATORY: A non-empty password (min 8 chars) is required.
-        Private keys are encrypted using AES-256-GCM derived via PBKDF2-HMAC-SHA256 (600,000 iterations).
-        Unencrypted private key storage is strictly prohibited.
+        Private keys are encrypted using AES-256-GCM derived via PBKDF2-HMAC-SHA256 (min 600,000 iterations).
+        Unencrypted private key storage and iteration downgrades below 600,000 are strictly prohibited.
         """
         if not password or not isinstance(password, str) or len(password.strip()) < 8:
             raise ValueError("A secure password (minimum 8 characters) is required to encrypt the agent keystore.")
+
+        if iterations < MIN_PBKDF2_ITERATIONS:
+            raise ValueError(f"Insecure PBKDF2 iteration count: {iterations}. Minimum permitted is {MIN_PBKDF2_ITERATIONS} iterations.")
 
         ed_raw = self.ed_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()
         x_raw = self.x_privkey.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()).hex()

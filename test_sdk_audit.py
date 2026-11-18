@@ -8,7 +8,12 @@ Comprehensive mathematical, cryptographic, concurrency, and security verificatio
 2.  X25519 E2EE Key Generation.
 3.  RFC 8785 Canonical JSON (JCS) determinism.
 4.  RFC 8785 Official Specification Vector Certification:
-    - Exponent formatting without leading zero (1e-7 -> "1e-7").
+    - Exact ECMAScript 7.1.12.1 ToString(Number) boundary compliance:
+      * 1e-7 -> "1e-7" (scientific without leading zero)
+      * 1e-6 -> "0.000001" (fixed-point boundary check)
+      * 1e-5 -> "0.00001"
+      * 1e20 -> "100000000000000000000" (fixed-point upper boundary check)
+      * 1e21 -> "1e+21" (scientific upper boundary check)
     - Safe integer boundary enforcement [-9007199254740991, 9007199254740991].
     - Rejection of out-of-bounds integers (9007199254740993).
     - Rejection of non-JSON types (Decimal).
@@ -24,7 +29,8 @@ Comprehensive mathematical, cryptographic, concurrency, and security verificatio
 11. Negative Proof: Expired Timestamp (>90s) Rejection.
 12. Hardened Keystore Persistence:
     - Mandatory password encryption (min 8 characters).
-    - OWASP PBKDF2-HMAC-SHA256 (600,000 iterations).
+    - Full 600,000 PBKDF2-HMAC-SHA256 iterations in audit test.
+    - Negative check: Rejection of insecure iteration downgrades (< 600,000).
     - AES-256-GCM authenticated encryption.
     - Rejection of empty/missing passwords.
     - Rejection of incorrect passwords.
@@ -81,14 +87,23 @@ def test_audit():
     print("    [✓] PASS: Deterministic canonical hashing verified.")
 
     # -------------------------------------------------------------------------
-    # TEST 3: RFC 8785 Formal Numeric & Vector Certification
+    # TEST 3: RFC 8785 Formal Numeric & Vector Certification (ECMAScript 7.1.12.1)
     # -------------------------------------------------------------------------
     print("\n[+] TEST 3: RFC 8785 Formal Numeric & Vector Certification...")
-    # 3.1: Exponent without leading zero (1e-7 -> "1e-7")
-    exp_data = {"small": 1e-7, "large": 1e21}
-    exp_bytes = canonical_json(exp_data)
-    assert b'"small":1e-7' in exp_bytes, f"Exponent leading zero failure: {exp_bytes}"
-    assert b'"large":1e+21' in exp_bytes, f"Large exponent formatting failure: {exp_bytes}"
+    # 3.1: ECMAScript boundary checks: 1e-7, 1e-6, 1e-5, 1e20, 1e21
+    bounds_data = {
+        "exp_low": 1e-7,
+        "dec_low": 1e-6,
+        "dec_mid": 1e-5,
+        "dec_high": 1e20,
+        "exp_high": 1e21
+    }
+    bounds_bytes = canonical_json(bounds_data)
+    assert b'"exp_low":1e-7' in bounds_bytes, f"1e-7 failure: {bounds_bytes}"
+    assert b'"dec_low":0.000001' in bounds_bytes, f"1e-6 boundary failure: {bounds_bytes}"
+    assert b'"dec_mid":0.00001' in bounds_bytes, f"1e-5 failure: {bounds_bytes}"
+    assert b'"dec_high":100000000000000000000' in bounds_bytes, f"1e20 boundary failure: {bounds_bytes}"
+    assert b'"exp_high":1e+21' in bounds_bytes, f"1e21 failure: {bounds_bytes}"
 
     # 3.2: Safe integer boundary enforcement [-9007199254740991, 9007199254740991]
     safe_max = 9007199254740991
@@ -139,11 +154,16 @@ def test_audit():
         except ValueError:
             pass
 
-    print("    • Exponent format without leading zeros (1e-7 -> '1e-7') verified.")
+    print("    • ECMAScript ToString(Number) boundary vectors verified:")
+    print("      * 1e-7 -> '1e-7' (scientific)")
+    print("      * 1e-6 -> '0.000001' (fixed-point boundary)")
+    print("      * 1e-5 -> '0.00001' (fixed-point)")
+    print("      * 1e20 -> '100000000000000000000' (fixed-point upper boundary)")
+    print("      * 1e21 -> '1e+21' (scientific upper boundary)")
     print("    • Safe integer limits [-(2^53-1), 2^53-1] verified; 9007199254740993 rejected.")
     print("    • Non-JSON Decimal type rejected with TypeError as required.")
     print("    • -0.0 -> 0, float integers, escapes, UTF-16 code unit order, and NaN/Inf rejection verified.")
-    print("    [✓] PASS: 100% formal RFC 8785 / JCS compliance certified.")
+    print("    [✓] PASS: 100% formal RFC 8785 / ECMAScript compliance certified.")
 
     # -------------------------------------------------------------------------
     # TEST 4: Authentic Ed25519 Request Signing
@@ -272,9 +292,9 @@ def test_audit():
     print("    [✓] PASS: Replay attempt with expired timestamp blocked.")
 
     # -------------------------------------------------------------------------
-    # TEST 11: Hardened Keystore Persistence (Mandatory AES-256-GCM Encryption)
+    # TEST 11: Hardened Keystore Persistence (Full 600,000 PBKDF2 Iterations)
     # -------------------------------------------------------------------------
-    print("\n[+] TEST 11: Hardened Keystore Persistence (Mandatory AES-256-GCM / 600k PBKDF2)...")
+    print("\n[+] TEST 11: Hardened Keystore Persistence (Full 600,000 PBKDF2 Iterations)...")
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
         keystore_path = tf.name
 
@@ -289,38 +309,51 @@ def test_audit():
             except ValueError:
                 pass
 
-        # 11.2: Successful save with 600,000 PBKDF2 iterations (using 50,000 for fast test SLA)
-        alice.save_keystore(keystore_path, password=password, iterations=50_000)
+        # 11.2: Rejection of insecure iteration count (< 600,000)
+        for bad_iter in [1000, 50_000, 100_000, 599_999]:
+            try:
+                alice.save_keystore(keystore_path, password=password, iterations=bad_iter)
+                assert False, f"SECURITY BREACH: Keystore allowed insecure iterations {bad_iter} (< 600,000)!"
+            except ValueError:
+                pass
+
+        # 11.3: Successful save using FULL default 600,000 iterations
+        t0 = time.time()
+        alice.save_keystore(keystore_path, password=password)  # Default: 600,000 iterations
+        t1 = time.time()
+        print(f"    • Keystore encrypted with 600,000 PBKDF2-HMAC-SHA256 rounds in {t1 - t0:.3f}s")
+
         with open(keystore_path, "r", encoding="utf-8") as f:
             encrypted_file_data = json.load(f)
 
         assert encrypted_file_data.get("encrypted") is True
+        assert encrypted_file_data.get("kdf", {}).get("iterations") == 600_000, "PBKDF2 iteration count was not 600,000!"
         assert "ed_privkey_hex" not in encrypted_file_data, "Private key leaked in plaintext in keystore!"
         assert "cipher" in encrypted_file_data and "nonce" in encrypted_file_data["cipher"]
 
-        # 11.3: Successful restore with valid password
+        # 11.4: Successful restore with valid password
         restored_enc = AgentCryptoIdentity.load_keystore(keystore_path, password=password)
         assert restored_enc.ed_pubkey_hex == alice.ed_pubkey_hex
         assert restored_enc.x_pubkey_hex == alice.x_pubkey_hex
 
-        # 11.4: Rejection of wrong password
+        # 11.5: Rejection of wrong password
         try:
             AgentCryptoIdentity.load_keystore(keystore_path, password="WrongPassword123!")
             assert False, "SECURITY BREACH: Keystore decrypted with incorrect password!"
         except ValueError:
             pass
 
-        # 11.5: Rejection of missing password
+        # 11.6: Rejection of missing password
         try:
             AgentCryptoIdentity.load_keystore(keystore_path, password="")
             assert False, "SECURITY BREACH: Encrypted keystore opened without password!"
         except ValueError:
             pass
 
-        print("    • Mandatory encryption enforced: empty or short passwords rejected.")
-        print("    • Unencrypted private key dumping eliminated.")
-        print("    • PBKDF2-HMAC-SHA256 + AES-256-GCM encryption verified.")
-        print("    [✓] PASS: Hardened keystore security confirmed.")
+        print("    • Full 600,000 PBKDF2 iterations validated in production configuration.")
+        print("    • Insecure iteration downgrades (< 600,000) strictly rejected.")
+        print("    • Unencrypted storage eliminated; AES-256-GCM authenticated encryption verified.")
+        print("    [✓] PASS: Hardened keystore 600k configuration confirmed.")
     finally:
         if os.path.exists(keystore_path):
             os.remove(keystore_path)
