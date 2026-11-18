@@ -1,0 +1,2 @@
+# Nexus Agents Crypto Protocol — Client Dependencies
+cryptography>=41.0.0
