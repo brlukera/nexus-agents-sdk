@@ -90,13 +90,14 @@ def test_audit():
     # TEST 3: RFC 8785 Formal Numeric & Vector Certification (ECMAScript 7.1.12.1)
     # -------------------------------------------------------------------------
     print("\n[+] TEST 3: RFC 8785 Formal Numeric & Vector Certification...")
-    # 3.1: ECMAScript boundary checks: 1e-7, 1e-6, 1e-5, 1e20, 1e21
+    # 3.1: ECMAScript boundary checks: 1e-7, 1e-6, 1e-5, 1e20, 1e21, and large float shortest decimal repr
     bounds_data = {
         "exp_low": 1e-7,
         "dec_low": 1e-6,
         "dec_mid": 1e-5,
         "dec_high": 1e20,
-        "exp_high": 1e21
+        "exp_high": 1e21,
+        "large_float": 1.0000000000000002e20
     }
     bounds_bytes = canonical_json(bounds_data)
     assert b'"exp_low":1e-7' in bounds_bytes, f"1e-7 failure: {bounds_bytes}"
@@ -104,6 +105,8 @@ def test_audit():
     assert b'"dec_mid":0.00001' in bounds_bytes, f"1e-5 failure: {bounds_bytes}"
     assert b'"dec_high":100000000000000000000' in bounds_bytes, f"1e20 boundary failure: {bounds_bytes}"
     assert b'"exp_high":1e+21' in bounds_bytes, f"1e21 failure: {bounds_bytes}"
+    assert b'"large_float":100000000000000020000' in bounds_bytes, f"1.0000000000000002e20 failure: {bounds_bytes}"
+    assert canonical_json({"neg_large": -1.0000000000000002e20}) == b'{"neg_large":-100000000000000020000}'
 
     # 3.2: Safe integer boundary enforcement [-9007199254740991, 9007199254740991]
     safe_max = 9007199254740991
@@ -159,6 +162,7 @@ def test_audit():
     print("      * 1e-6 -> '0.000001' (fixed-point boundary)")
     print("      * 1e-5 -> '0.00001' (fixed-point)")
     print("      * 1e20 -> '100000000000000000000' (fixed-point upper boundary)")
+    print("      * 1.0000000000000002e20 -> '100000000000000020000' (shortest decimal float repr)")
     print("      * 1e21 -> '1e+21' (scientific upper boundary)")
     print("    • Safe integer limits [-(2^53-1), 2^53-1] verified; 9007199254740993 rejected.")
     print("    • Non-JSON Decimal type rejected with TypeError as required.")
@@ -350,8 +354,21 @@ def test_audit():
         except ValueError:
             pass
 
+        # 11.7: Rejection of tampered / downgraded keystores (< 600,000 iterations in file)
+        with open(keystore_path, "r", encoding="utf-8") as f:
+            tampered_data = json.load(f)
+        for bad_iter in [1000, 50_000, 100_000, 599_999]:
+            tampered_data["kdf"]["iterations"] = bad_iter
+            with open(keystore_path, "w", encoding="utf-8") as f:
+                json.dump(tampered_data, f)
+            try:
+                AgentCryptoIdentity.load_keystore(keystore_path, password=password)
+                assert False, f"SECURITY BREACH: Keystore loaded with downgraded iterations {bad_iter} (< 600,000)!"
+            except ValueError:
+                pass
+
         print("    • Full 600,000 PBKDF2 iterations validated in production configuration.")
-        print("    • Insecure iteration downgrades (< 600,000) strictly rejected.")
+        print("    • Insecure iteration downgrades (< 600,000) strictly rejected on BOTH save and load.")
         print("    • Unencrypted storage eliminated; AES-256-GCM authenticated encryption verified.")
         print("    [✓] PASS: Hardened keystore 600k configuration confirmed.")
     finally:

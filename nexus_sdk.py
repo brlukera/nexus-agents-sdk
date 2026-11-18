@@ -82,8 +82,11 @@ def _format_ecmascript_number(val: float) -> str:
     if val < 0:
         return "-" + _format_ecmascript_number(-val)
 
-    # Float integers below 1e21 are serialized without decimal point or exponent
-    if val.is_integer() and val < 1e21:
+    # Float integers within safe integer range are serialized without decimal point or exponent.
+    # Note: Floats > JCS_MAX_SAFE_INT (e.g. 1.0000000000000002e20) must be processed through
+    # the ECMAScript shortest round-trip parsing logic below to produce "100000000000000020000",
+    # rather than Python's exact integer conversion (100000000000000016384).
+    if val.is_integer() and val <= JCS_MAX_SAFE_INT:
         return str(int(val))
 
     # Use Python's shortest round-trip float repr (David Gay dtoa)
@@ -422,8 +425,18 @@ class AgentCryptoIdentity:
 
         kdf_info = data.get("kdf", {})
         cipher_info = data.get("cipher", {})
+        if not isinstance(kdf_info, dict) or "salt" not in kdf_info:
+            raise ValueError("Corrupt keystore: missing KDF parameters.")
+        if not isinstance(cipher_info, dict) or "nonce" not in cipher_info or "ciphertext" not in cipher_info:
+            raise ValueError("Corrupt keystore: missing cipher parameters.")
+
         salt = bytes.fromhex(kdf_info["salt"])
         iterations = kdf_info.get("iterations", PBKDF2_RECOMMENDED_ITERATIONS)
+        if not isinstance(iterations, int) or iterations < MIN_PBKDF2_ITERATIONS:
+            raise ValueError(
+                f"Insecure keystore KDF iteration count: {iterations}. "
+                f"Minimum permitted is {MIN_PBKDF2_ITERATIONS} iterations."
+            )
         nonce = bytes.fromhex(cipher_info["nonce"])
         ciphertext = bytes.fromhex(cipher_info["ciphertext"])
 

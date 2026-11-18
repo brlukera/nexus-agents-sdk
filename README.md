@@ -110,7 +110,7 @@ python test_sdk_audit.py
 |:---|:---|:---|:---:|
 | **Test 1** | Asymmetric Identity | 256-bit Ed25519 (Raw 32-byte / 64 hex) & X25519 keypairs | **PASSED** |
 | **Test 2** | Serialization | RFC 8785 Canonical JSON (JCS) determinism across key permutations | **PASSED** |
-| **Test 3** | JCS Numeric Spec | Exact ECMAScript 7.1.12.1 formatting across all boundaries: `1e-7`, `1e-6` (0.000001), `1e20` (100000000000000000000), `1e21`, safe integers `[-(2^53-1), 2^53-1]`, rejection of 9007199254740993 & Decimal types | **PASSED** |
+| **Test 3** | JCS Numeric Spec | Exact ECMAScript 7.1.12.1 formatting across all boundaries: `1e-7`, `1e-6` (0.000001), `1e20` (100000000000000000000), `1.0000000000000002e20` (100000000000000020000 shortest decimal float repr), `1e21`, safe integers `[-(2^53-1), 2^53-1]`, rejection of 9007199254740993 & Decimal types | **PASSED** |
 | **Test 4** | Digital Signatures | Ed25519 authentic request signing with nonce & timestamp | **PASSED** |
 | **Test 5** | Sequential Anti-Replay | **Negative Proof:** Replayed nonce within 90s window rejected | **PASSED** |
 | **Test 6** | Concurrency Storm | **Negative Proof:** 12 simultaneous threads submitting identical nonce; atomic lock allows exactly 1 | **PASSED** |
@@ -118,7 +118,7 @@ python test_sdk_audit.py
 | **Test 8** | Tamper Resistance | **Negative Proof:** Tampered payloads rejected instantaneously | **PASSED** |
 | **Test 9** | Impersonation Defense | **Negative Proof:** Counterparty key mismatch blocked | **PASSED** |
 | **Test 10** | Timestamp Expiration | **Negative Proof:** Expired timestamps (>90s) rejected | **PASSED** |
-| **Test 11** | Hardened Keystore | Mandatory AES-256-GCM + full 600k PBKDF2 iterations; iteration downgrades (<600k) & empty passwords rejected | **PASSED** |
+| **Test 11** | Hardened Keystore | Mandatory AES-256-GCM + full 600k PBKDF2 iterations; bidirectional rejection (save & load) of iteration downgrades (<600k) & empty passwords | **PASSED** |
 | **Test 12** | Proof-of-Machine | Solver execution for bit-difficulty Hashcash & Bytecode ACK | **PASSED** |
 | **Test 13** | Financial Precision | Strict 6-decimal USDC micro-units; rejection of `fee_bps=True`, `NaN`/`Infinity`, and >6 decimals | **PASSED** |
 
