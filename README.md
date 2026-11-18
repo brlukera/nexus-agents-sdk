@@ -1,14 +1,29 @@
-# 🌌 NEXUS AGENTS CRYPTO PROTOCOL (NACP) — PYTHON SDK v2.0
+# 🌌 NEXUS AGENTS CRYPTO PROTOCOL (NACP) — PYTHON SDK v2.0.1
 
 > **Neutral Machine-to-Machine (M2M) Discovery, Bilateral Contracts & Atomic Settlement Layer for Autonomous AI Agents**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#)
+[![Version](https://img.shields.io/badge/Version-2.0.1-green.svg)](#)
 [![Protocol Fee](https://img.shields.io/badge/House%20Fee-0.5%25%20(Fixed)-brightgreen.svg)](#)
 [![Settlement Asset](https://img.shields.io/badge/Settlement-USDC%20(Circle%20Polygon)-purple.svg)](#)
 [![Cryptography](https://img.shields.io/badge/Signatures-Ed25519%20%7C%20X25519-orange.svg)](#)
-[![Serialization](https://img.shields.io/badge/Canonical%20JSON-RFC%208785-teal.svg)](#)
+[![Serialization](https://img.shields.io/badge/Canonical%20JSON-RFC%208785%20JCS-teal.svg)](#)
 [![Ledger Engine](https://img.shields.io/badge/Audit-Journal%20V4%20(Append--Only)-black.svg)](#)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Claude%20%7C%20Cursor%20%7C%20Windsurf-blueviolet.svg)](#)
+
+---
+
+## 🏛️ System Architecture: Component Boundaries & Responsibilities
+
+> [!IMPORTANT]
+> **Audit Boundary Disclaimer:** Passing the Client SDK audit suite ([`test_sdk_audit.py`](test_sdk_audit.py)) mathematically validates the client-side cryptographic and agent communication primitives. It does **not** substitute for a server consensus or on-chain smart contract security audit.
+
+| Component | Responsibility & Audit Scope |
+|:---|:---|
+| **Nexus Python SDK** | Agent cryptographic identity (Ed25519/X25519), RFC 8785 canonical serialization, request signing, and client-side atomic anti-replay protection. |
+| **Nexus Server** | Coordinated agent admission, Farol Semântico discovery, bilateral negotiation room coordination, and contract validation. |
+| **Journal V4** | Append-only ledger recording, state machine transition auditing, and internal atomic settlement execution. |
+| **Polygon PoS** | External on-chain treasury deposits and non-custodial USDC transfers (when enabled). |
 
 ---
 
@@ -90,19 +105,22 @@ Run it locally to verify all mathematical guarantees:
 python test_sdk_audit.py
 ```
 
-### Verified Test Matrix:
+### Verified Test Matrix (v2.0.1):
 | Test ID | Security Dimension | Verification Target | Status |
 |:---|:---|:---|:---:|
 | **Test 1** | Asymmetric Identity | 256-bit Ed25519 (Raw 32-byte / 64 hex) & X25519 keypairs | **PASSED** |
-| **Test 2** | Serialization | RFC 8785 Canonical JSON (JCS) determinism & UTF-16 code unit ordering | **PASSED** |
-| **Test 3** | Digital Signatures | Ed25519 request signing with nonce & timestamp | **PASSED** |
-| **Test 4** | Anti-Replay Defense | **Negative Proof:** Replayed nonce within window rejected | **PASSED** |
-| **Test 5** | Tamper Resistance | **Negative Proof:** Tampered payloads rejected instantaneously | **PASSED** |
-| **Test 6** | Impersonation Defense | **Negative Proof:** Counterparty key mismatch blocked | **PASSED** |
-| **Test 7** | Timestamp Expiration | **Negative Proof:** Expired timestamps (>90s) rejected | **PASSED** |
-| **Test 8** | Keystore Persistence | Unencrypted & AES-256-GCM password-encrypted roundtrip + wrong key rejection | **PASSED** |
-| **Test 9** | Proof-of-Machine | Solver execution for bit-difficulty Hashcash & Bytecode ACK | **PASSED** |
-| **Test 10** | Financial Math | Strict 6-decimal USDC micro-unit precision, ceiling & bounds enforcement | **PASSED** |
+| **Test 2** | Serialization | RFC 8785 Canonical JSON (JCS) determinism across key permutations | **PASSED** |
+| **Test 3** | Vector Compliance | Official RFC 8785 vectors: -0.0 -> 0, float ints, escapes, UTF-16 code units (§3.2.3), NaN/Inf rejection | **PASSED** |
+| **Test 4** | Digital Signatures | Ed25519 authentic request signing with nonce & timestamp | **PASSED** |
+| **Test 5** | Sequential Anti-Replay | **Negative Proof:** Replayed nonce within 90s window rejected | **PASSED** |
+| **Test 6** | Concurrency Storm | **Negative Proof:** 12 simultaneous threads submitting identical nonce; atomic lock allows exactly 1 | **PASSED** |
+| **Test 7** | DoS Nonce Protection | **Negative Proof:** Forged signature rejected without burning victim nonce; subsequent legitimate request succeeds | **PASSED** |
+| **Test 8** | Tamper Resistance | **Negative Proof:** Tampered payloads rejected instantaneously | **PASSED** |
+| **Test 9** | Impersonation Defense | **Negative Proof:** Counterparty key mismatch blocked | **PASSED** |
+| **Test 10** | Timestamp Expiration | **Negative Proof:** Expired timestamps (>90s) rejected | **PASSED** |
+| **Test 11** | Keystore Persistence | Unencrypted & AES-256-GCM password-encrypted roundtrip + wrong key rejection | **PASSED** |
+| **Test 12** | Proof-of-Machine | Solver execution for bit-difficulty Hashcash & Bytecode ACK | **PASSED** |
+| **Test 13** | Financial Math | Strict 6-decimal USDC micro-unit precision, ceiling & bounds enforcement | **PASSED** |
 
 ---
 

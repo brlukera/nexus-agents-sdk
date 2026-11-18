@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ==============================================================================
-NEXUS AGENTS CRYPTO PROTOCOL (NACP) — CLIENT SDK v2.0
+NEXUS AGENTS CRYPTO PROTOCOL (NACP) — CLIENT SDK v2.0.1
 ==============================================================================
 High-Throughput Machine-to-Machine (M2M) Liquidity & Atomic Settlement Engine.
 Built for Autonomous AI Agents, Algorithmic Arbitrageurs & Data Oracles.
@@ -10,8 +10,8 @@ Built for Autonomous AI Agents, Algorithmic Arbitrageurs & Data Oracles.
 Features:
 - Genuine Ed25519 cryptographic identity & request signing.
 - X25519 E2EE key derivation support.
-- Strict RFC 8785 Canonical JSON serialization (JCS) for tamper-proof signatures.
-- Anti-replay protection with nonce cache & 90s timestamp verification window.
+- Strict RFC 8785 Canonical JSON serialization (JCS) with official vector compliance.
+- Thread-safe atomic anti-replay protection (concurrency race-free & DoS resilient).
 - Machine-grade Proof-of-Work (PoW) solver for protocol admission.
 - Secure keystore with optional AES-256-GCM password encryption.
 - Financial arithmetic in decimal.Decimal with 6 decimal places (USDC micro-units).
@@ -67,6 +67,8 @@ def _rfc8785_encode(val: Any) -> str:
     elif isinstance(val, float):
         if val != val or val == float('inf') or val == float('-inf'):
             raise ValueError("NaN and Infinity are not permitted in RFC 8785 canonical JSON")
+        if val == 0.0:
+            return "0"
         if val.is_integer():
             return str(int(val))
         return json.dumps(val)
@@ -147,7 +149,17 @@ def sign_request(path: str, body: Dict[str, Any], agent_id: str, private_key: ed
 def verify_signature(path: str, body: Dict[str, Any], auth_claim: Dict[str, Any], pubkey_hex: str) -> bool:
     """
     Verifies an Ed25519 signature against an expected public key.
-    Includes strict 90-second timestamp window and stateful anti-replay nonce cache.
+    Enforces a strict 90-second timestamp window and atomic thread-safe anti-replay cache.
+
+    Security flow:
+    1. Structure and timestamp validation.
+    2. Ed25519 cryptographic verification FIRST (prevents DoS/frontrunning of legitimate nonces).
+    3. Atomic thread-lock acquisition:
+       - Purge expired nonces (>90s).
+       - Check if nonce already exists in seen cache.
+       - If seen, reject (replay attack blocked).
+       - If fresh, immediately insert nonce into cache.
+    4. Release lock and accept request.
     """
     if not isinstance(auth_claim, dict):
         return False
@@ -165,27 +177,29 @@ def verify_signature(path: str, body: Dict[str, Any], auth_claim: Dict[str, Any]
     if not isinstance(agent_id, str) or not agent_id:
         return False
 
-    # Anti-Replay: Check if nonce was already presented within valid window
-    now = time.time()
-    nonce_key = f"{agent_id}:{nonce}"
-    with _NONCE_LOCK:
-        _purge_expired_nonces(now)
-        if nonce_key in _SEEN_NONCES:
-            return False  # REPLAY ATTACK BLOCKED: Nonce already used!
-
+    # 1. Validar assinatura criptográfica PRIMEIRO (evita DoS em nonces legítimos)
     try:
         raw_pubkey = bytes.fromhex(pubkey_hex)
         public_key = ed25519.Ed25519PublicKey.from_public_bytes(raw_pubkey)
         message = canonical_message(path, body, agent_id, ts, nonce)
         public_key.verify(bytes.fromhex(signature), message)
-
-        # Mark nonce as consumed
-        with _NONCE_LOCK:
-            _SEEN_NONCES[nonce_key] = now
-
-        return True
     except (ValueError, InvalidSignature, TypeError):
         return False
+
+    # 2. Entrar no thread-lock atômico para verificar e reservar o nonce
+    now = time.time()
+    nonce_key = f"{agent_id}:{nonce}"
+    with _NONCE_LOCK:
+        # 3. Remover nonces expirados
+        _purge_expired_nonces(now)
+        # 4. Verificar se o nonce já foi consumido
+        if nonce_key in _SEEN_NONCES:
+            return False  # REPLAY ATTACK BLOCKED: Nonce já utilizado!
+        # 5. Inserir imediatamente no mesmo lock
+        _SEEN_NONCES[nonce_key] = now
+
+    # 6. Liberar lock e aceitar requisição
+    return True
 
 
 # ============================================================================
