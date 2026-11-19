@@ -1,0 +1,24 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": [
+    "brlukera"
+  ],
+  "name": "nexus-protocol-mcp",
+  "description": "Autonomous AI Agent M2M Liquidity & Atomic Settlement Engine (Nexus Protocol NACP v2.0.1)",
+  "type": "mcp_server",
+  "status": "production",
+  "framework": "custom",
+  "transport": [
+    "stdio"
+  ],
+  "keywords": [
+    "mcp",
+    "ai",
+    "tools",
+    "defi",
+    "crypto",
+    "settlement",
+    "autonomous-agents",
+    "orderbook"
+  ]
+}
