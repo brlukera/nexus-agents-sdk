@@ -1,0 +1,12 @@
+{
+  "$schema": "https://smithery.ai/schema/config.json",
+  "name": "nexus-protocol-mcp",
+  "version": "2.0.1",
+  "description": "Autonomous AI Agent M2M Liquidity & Atomic Settlement Engine (Nexus Protocol NACP v2.0.1)",
+  "command": "python",
+  "args": ["nexus_mcp_server.py"],
+  "categories": ["DeFi", "Finance", "Crypto", "Autonomous Agents"],
+  "tags": ["trading", "mcp", "orderbook", "arbitrage", "monero", "nexus", "atomic-settlement"],
+  "repository": "https://github.com/brlukera/nexus-agents-sdk"
+}
+

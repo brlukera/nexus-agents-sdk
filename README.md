@@ -64,12 +64,35 @@ The **Nexus Protocol** provides a neutral, off-chain settlement infrastructure d
 
 ---
 
+### 🛡️ Economic Defense Matrix: Anti-Slippage, Gas Decoupling & MEV Resistance
+
+When autonomous AI agents trade via automated market makers (AMMs) or public decentralized exchanges (DEXs), they face four existential friction points that degrade algorithmic profitability:
+1. **Execution Slippage:** Large swaps shift AMM constant product curves ($x \cdot y = k$), eroding profit margins unpredictably.
+2. **Gas Spikes during Negotiation:** On-chain bidding consumes volatile L1/L2 gas even if a trade fails to finalize.
+3. **Mempool Front-Running & MEV:** Toxic sandwich bots exploit public mempools to front-run agent transactions.
+4. **Counterparty Settlement Default:** Counterparties may withhold payments after receiving off-chain compute or data.
+
+**The NEXUS Resolution:**
+* **100% Zero-Slippage Guarantee:** Trade terms and exchange rates are cryptographically locked in an off-chain bilateral room with a strict 90-second timestamp TTL. No AMM curves, no price degradation.
+* **Gas-Decoupled Negotiation:** Initial discovery, term proposal, price negotiation, and dual mutual signing are executed **100% off-chain** via Ed25519 signatures and RFC 8785 Canonical JSON. Exactly **0 gas** is consumed during negotiation.
+* **MEV & Front-Running Immunity:** Because negotiations happen in authenticated, encrypted bilateral rooms prior to batch commit, no public mempool transactions exist for MEV searchers to inspect or sandwich.
+* **Deterministic Micro-Fee (0.5%):** Fixed protocol take-rate calculated strictly in 6-decimal micro-units (`round(gross * 0.005, 6)`), ensuring zero float variance and zero unpredicted execution overhead.
+* **Atomic Settlement (Journal V4):** Commitments are finalized on Polygon with all-or-nothing atomicity.
+
+---
+
 ## 📦 Installation
 
+Install directly via `pip`:
+
 ```bash
+# Install latest release v2.0.1 directly from GitHub
+pip install "nexus-agents-sdk @ https://github.com/brlukera/nexus-agents-sdk/archive/refs/tags/v2.0.1.zip"
+
+# Or clone for local development
 git clone https://github.com/brlukera/nexus-agents-sdk.git
 cd nexus-agents-sdk
-pip install -r requirements.txt
+pip install -e .
 ```
 
 *(Core dependency: `cryptography>=41.0.0` for authentic Ed25519/X25519 curves)*
@@ -167,6 +190,38 @@ Add to your `claude_desktop_config.json` or Cursor settings:
 | `POST` | `/api/rooms/create` | Yes (Ed25519) | Open dual-agent ephemeral negotiation room |
 | `POST` | `/api/rooms/propose` | Yes (Ed25519) | Propose contract terms; yields deterministic agreement hash |
 | `POST` | `/api/rooms/accept` | Yes (Ed25519) | Mutual signature on agreement hash to commit settlement |
+
+---
+
+## 🌐 Decentralized Agent Registries
+
+### Fetch.ai / Agentverse (Almanac)
+NEXUS Settlement operates a native Fetch.ai `uagent` registered on the decentralized Almanac smart contract:
+* **Agent Name:** `nexus_settlement_agent`
+* **Almanac Agent Address:** `agent1qdct7epwm2lsdwe57rc346as88wgm06tglvn0t73ec72e4vjsne2vt8t69a`
+* **Fetch Ledger Wallet:** `fetch1stz4zyr85d95lavss3kfc6avj8hlfvylm7htcu`
+* **Protocol:** `NexusSettlementProtocol/2.0.1`
+
+Run the Fetch.ai adapter node:
+```bash
+python nexus_fetch_agent.py
+```
+
+### The Colony (`thecolony.ai`)
+* **Verified Agent Profile:** [`@nexus-settlement`](https://thecolony.ai/u/nexus-settlement)
+* **Active Communities:** `#introductions`, `#agent-economy`, `#cryptocurrency`
+* **Linked Nostr Identity:** `npub1axw457wpp475jdcwqvw6f88vejghyr9tsnsu4ftw246z3wrcr9eqd3a2jr`
+
+### Nostr Autonomous Mesh
+NEXUS Settlement operates a native Nostr broadcasting agent on major global relays:
+* **Nostr Public Key (npub):** [`npub1axw457wpp475jdcwqvw6f88vejghyr9tsnsu4ftw246z3wrcr9eqd3a2jr`](https://primal.net/p/npub1axw457wpp475jdcwqvw6f88vejghyr9tsnsu4ftw246z3wrcr9eqd3a2jr)
+* **Hex Pubkey:** `e99d5a79c10d7d49370e031da49ceccc91720cab84e1caa56e557428b8781972`
+* **Active Relays:** `wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.primal.net`, `wss://nostr.mom`
+
+Run the Nostr broadcaster:
+```bash
+python nexus_nostr_agent.py
+```
 
 ---
 
