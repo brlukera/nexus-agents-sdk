@@ -1,522 +1,697 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NEXUS // Autonomous Agent Crypto Protocol</title>
+  <title>NEXUS PROTOCOL — Autonomous M2M Settlement & Liquidity Rail for AI Agents</title>
+  <meta name="description" content="NEXUS Protocol (NACP v2.0.1) — Autonomous Machine-to-Machine settlement and liquidity protocol for AI agents. Native Virtuals G.A.M.E. SDK, Model Context Protocol (MCP), and RFC 8785 Ed25519 USDC clearing.">
+  <meta name="keywords" content="NEXUS, AI Agents, M2M Settlement, Virtuals Protocol, GAME SDK, Model Context Protocol, MCP, Stablecoin, USDC, Polygon, Ed25519, RFC 8785">
+  <meta name="author" content="NEXUS Protocol">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="NEXUS PROTOCOL — Autonomous M2M Settlement Rail">
+  <meta property="og:description" content="Autonomous M2M bilateral cryptographic clearing in USDC. Zero human intervention, sub-second latency, Virtuals G.A.M.E. SDK and MCP native.">
+  <meta property="og:url" content="https://nexus-settlement.xyz/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NEXUS PROTOCOL — Autonomous Agent Settlement Rail">
+  <meta name="twitter:description" content="Sub-second bilateral clearing for Virtuals and autonomous AI bots in deterministic USDC.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #070b14;
-      --card: #0f172a;
-      --card-hover: #17233c;
-      --border: #22324f;
+      --bg: #06090e;
+      --surface: #0d131f;
+      --surface-hover: #141d2f;
+      --border: #1e293b;
+      --border-bright: #334155;
       --cyan: #00f0ff;
-      --purple: #c084fc;
-      --purple-bg: rgba(192, 132, 252, 0.15);
-      --green: #10b981;
-      --green-bright: #34d399;
-      --yellow: #fbbf24;
+      --cyan-glow: rgba(0, 240, 255, 0.15);
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.15);
+      --purple: #a855f7;
       --text: #f8fafc;
-      --text-sub: #cbd5e1;
-      --muted: #94a3b8;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; font-size: 16px; line-height: 1.5; }
-    .container { max-width: 1350px; margin: 0 auto; }
-    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    code, pre, .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    /* Glow Effects */
+    .glow-cyan {
+      box-shadow: 0 0 40px var(--cyan-glow);
+    }
+    /* Header */
     header {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 24px 28px;
-      margin-bottom: 24px;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: rgba(6, 9, 14, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 50;
+    }
+    .header-content {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 18px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
-    .logo-area h1 { font-size: 1.85rem; letter-spacing: 0.5px; color: var(--cyan); display: flex; align-items: center; gap: 12px; font-weight: 800; }
-    .logo-area p { font-size: 1.02rem; color: var(--text-sub); margin-top: 6px; }
-    .badge-live { background: rgba(16, 185, 129, 0.2); color: var(--green-bright); border: 1px solid var(--green); padding: 6px 14px; border-radius: 20px; font-size: 0.92rem; font-weight: bold; }
-    .admin-pill { background: var(--purple-bg); color: #e9d5ff; border: 1px solid var(--purple); padding: 10px 18px; border-radius: 10px; font-size: 0.98rem; font-weight: 600; }
-
-    /* Métricas Grandes */
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-bottom: 24px; }
-    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; text-align: center; }
-    .stat-val { font-size: 2.3rem; font-weight: 800; margin-top: 6px; letter-spacing: 0.5px; }
-    .stat-lbl { font-size: 0.88rem; text-transform: uppercase; color: var(--text-sub); letter-spacing: 1.2px; font-weight: 700; }
-
-    /* Barra de Ações */
-    .actions-bar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
-    .btn-action {
-      background: #1e293b;
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #00f0ff, #0077ff);
+      color: #000;
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-link:hover {
       color: var(--cyan);
-      border: 1px solid var(--border);
-      padding: 12px 20px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
       border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--cyan);
+      color: #000;
+    }
+    .btn-primary:hover {
+      background: #38f4ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px var(--cyan-glow);
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border-bright);
+      color: var(--text);
+    }
+    .btn-outline:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+      position: relative;
+    }
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--emerald);
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--emerald);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .hero-title {
+      font-size: 3.5rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+      background: linear-gradient(180deg, #ffffff 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+    }
+    .hero-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 48px;
+      flex-wrap: wrap;
+    }
+    /* Pip Terminal Box */
+    .install-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      max-width: 620px;
+      width: 100%;
+      margin: 0 auto;
+      text-align: left;
+    }
+    .install-cmd {
+      color: var(--cyan);
       font-size: 0.95rem;
-      font-weight: bold;
+    }
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-bright);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .btn-action:hover { background: #334155; border-color: var(--cyan); transform: translateY(-1px); }
-    .btn-action.primary { background: var(--cyan); color: #040812; border: none; }
-    .btn-action.primary:hover { filter: brightness(1.15); }
-    .btn-action.withdraw { background: var(--purple); color: #040812; border: none; }
-    .btn-action.withdraw:hover { filter: brightness(1.15); }
-
-    /* Layout de 3 Colunas */
-    .main-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
-    @media (max-width: 1080px) { .main-grid { grid-template-columns: 1fr; } }
-
-    .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; }
-    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-    .section-title { font-size: 1.15rem; color: var(--cyan); font-weight: 700; display: flex; align-items: center; gap: 8px; }
-
-    .item-list { display: flex; flex-direction: column; gap: 12px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
-    .item-row {
-      background: #090e1a;
-      border: 1px solid #1c2a44;
-      border-radius: 10px;
-      padding: 14px 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: background 0.15s;
-    }
-    .item-row:hover { background: var(--card-hover); border-color: #2b3e63; }
-    .item-left { display: flex; flex-direction: column; gap: 5px; }
-    .item-title { font-size: 1.02rem; font-weight: 700; color: #ffffff; letter-spacing: 0.3px; }
-    .item-sub { font-size: 0.88rem; color: var(--text-sub); font-weight: 500; }
-    .item-right { text-align: right; }
-    .tag-fee { background: rgba(192, 132, 252, 0.25); color: #f3e8ff; border: 1px solid var(--purple); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; display: inline-block; }
-    .tag-room { background: rgba(251, 191, 36, 0.2); color: #fef08a; border: 1px solid var(--yellow); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; display: inline-block; }
-    
-    .beacon-box {
-      margin-top: 24px;
-      background: #090e1a;
-      border: 1px dashed #2b3e63;
-      border-radius: 12px;
-      padding: 20px;
-      font-size: 0.98rem;
-      color: var(--text-sub);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 14px;
-    }
-
-    /* Modal de Saque Visual */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(3, 7, 18, 0.85);
-      backdrop-filter: blur(8px);
-      z-index: 999;
-      justify-content: center;
-      align-items: center;
-      padding: 16px;
-    }
-    .modal-box {
-      background: #0f172a;
-      border: 1px solid var(--purple);
-      border-radius: 16px;
-      max-width: 520px;
-      width: 100%;
-      padding: 26px;
-      box-shadow: 0 12px 40px rgba(192, 132, 252, 0.25);
-    }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .modal-header h3 { font-size: 1.35rem; color: #e9d5ff; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-    .close-btn { background: none; border: none; font-size: 1.5rem; color: var(--muted); cursor: pointer; }
-    .close-btn:hover { color: #fff; }
-
-    .amount-control {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 16px 0;
-    }
-    .btn-step {
-      background: #1e293b;
+    .copy-btn:hover {
       color: #fff;
+      border-color: var(--cyan);
+    }
+    /* Metrics Grid */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin: 40px 0 80px;
+    }
+    .metric-card {
+      background: var(--surface);
       border: 1px solid var(--border);
-      width: 48px;
-      height: 48px;
-      border-radius: 8px;
-      font-size: 1.3rem;
-      font-weight: bold;
-      cursor: pointer;
+      padding: 24px;
+      border-radius: 12px;
+      text-align: left;
     }
-    .btn-step:hover { background: #334155; border-color: var(--cyan); }
-    .amount-input {
-      flex: 1;
-      background: #05080e;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      height: 48px;
-      padding: 0 14px;
+    .metric-value {
+      font-size: 1.85rem;
+      font-weight: 700;
       color: #fff;
-      font-size: 1.3rem;
-      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .metric-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    /* Feature Section */
+    .section {
+      padding: 60px 0;
+    }
+    .section-title {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
       text-align: center;
     }
-
-    .preset-chips { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
-    .chip {
-      background: #1e293b;
-      color: var(--text-sub);
-      border: 1px solid var(--border);
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 0.88rem;
-      font-weight: 600;
-      cursor: pointer;
+    .section-desc {
+      color: var(--text-muted);
+      text-align: center;
+      max-width: 650px;
+      margin: 0 auto 48px;
+      font-size: 1.05rem;
     }
-    .chip:hover { border-color: var(--purple); color: #fff; }
-    .chip.active { background: var(--purple); color: #040812; border-color: var(--purple); }
-
-    .calc-preview {
-      background: #05080e;
-      border: 1px dashed #2b3e63;
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px 28px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .feature-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--cyan);
+    }
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      background: var(--cyan-glow);
+      border: 1px solid var(--cyan);
       border-radius: 10px;
-      padding: 14px;
-      margin-bottom: 18px;
-      font-size: 0.92rem;
-      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      color: var(--cyan);
+      font-size: 1.25rem;
+    }
+    .feature-card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.925rem;
+      line-height: 1.6;
+    }
+    /* Code Comparison & Architecture */
+    .code-container {
+      background: #090e17;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin: 40px 0;
+    }
+    .code-header {
+      background: var(--surface);
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .wallet-input {
-      width: 100%;
-      background: #05080e;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 12px;
-      color: #fff;
-      font-family: monospace;
-      font-size: 0.9rem;
-      margin-bottom: 20px;
+    .code-tabs {
+      display: flex;
+      gap: 8px;
     }
-    .btn-confirm-withdraw {
-      width: 100%;
-      background: linear-gradient(135deg, #a855f7, #7c3aed);
-      color: #fff;
+    .code-tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
       border: none;
-      padding: 14px;
-      border-radius: 10px;
-      font-size: 1.1rem;
-      font-weight: bold;
       cursor: pointer;
-      box-shadow: 0 4px 18px rgba(168, 85, 247, 0.4);
     }
-    .btn-confirm-withdraw:hover { filter: brightness(1.15); }
+    .code-tab.active {
+      background: rgba(0, 240, 255, 0.1);
+      color: var(--cyan);
+    }
+    .code-body {
+      padding: 24px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: #e2e8f0;
+    }
+    /* Architecture Grid */
+    .arch-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px;
+      margin: 40px 0;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin-top: 24px;
+    }
+    .arch-zone {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-bright);
+      border-radius: 10px;
+      padding: 24px;
+    }
+    .arch-zone h4 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--cyan);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .arch-list {
+      list-style: none;
+    }
+    .arch-list li {
+      padding: 6px 0;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .arch-list li::before {
+      content: "✔";
+      color: var(--emerald);
+      font-size: 0.75rem;
+    }
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 0;
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      text-align: center;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 16px;
+    }
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    .footer-links a:hover {
+      color: var(--cyan);
+    }
+    @media (max-width: 900px) {
+      .hero-title { font-size: 2.5rem; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .grid-3 { grid-template-columns: 1fr; }
+      .arch-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div class="logo-area">
-        <h1>⚡ NEXUS PROTOCOL <span class="badge-live">● M2M LIVE</span></h1>
-        <p>Liquidação Criptográfica Off-Chain para Agentes de IA • Taxa Zero de Latência</p>
-      </div>
-      <div class="admin-pill">
-        👑 Carteira Coletora: <b>0xNEXUS_TREASURY (Taxa: 0.5%)</b>
-      </div>
-    </header>
 
-    <!-- Métricas ao Vivo -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-lbl">Agentes Conectados</div>
-        <div class="stat-val" id="stat-agents" style="color: var(--cyan);">--</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-lbl">Volume Negociado</div>
-        <div class="stat-val" id="stat-vol" style="color: #ffffff;">$0.00</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-lbl">Salas Privadas Ativas</div>
-        <div class="stat-val" id="stat-rooms" style="color: var(--yellow);">--</div>
-      </div>
-      <div class="stat-card" style="border-color: var(--purple); background: #131226;">
-        <div class="stat-lbl">Seu Lucro Disponível (USDX)</div>
-        <div class="stat-val" id="stat-fees" style="color: #e9d5ff;">$0.0000</div>
+  <!-- Top Navigation -->
+  <header>
+    <div class="container header-content">
+      <a href="/" class="logo">
+        <span>⚡ NEXUS</span>
+        <span class="logo-badge">v2.0.1</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#quickstart" class="nav-link">Quickstart</a>
+        <a href="#architecture" class="nav-link">Architecture</a>
+        <a href="https://pypi.org/project/nexus-agents-sdk/2.0.1/" target="_blank" class="nav-link">PyPI</a>
+        <a href="https://github.com/brlukera/nexus-agents-sdk" target="_blank" class="btn btn-outline">GitHub</a>
       </div>
     </div>
+  </header>
 
-    <!-- Barra de Ações Rápidas -->
-    <div class="actions-bar">
-      <button class="btn-action withdraw" onclick="openWithdrawModal()">👻 Sacar via Monero (XMR Stealth)</button>
-      <button class="btn-action" onclick="updateDashboard()">🔄 Atualizar Painel</button>
-    </div>
-
-    <!-- Grid Principal (3 Colunas) -->
-    <div class="main-grid">
-      <!-- 1. Agentes Ativos -->
-      <div class="section-card">
-        <div class="section-header">
-          <span class="section-title">🤖 Agentes Registrados</span>
-          <span style="font-size: 0.85rem; color: var(--text-sub); font-weight: 600;">Identidades P2P</span>
-        </div>
-        <div class="item-list" id="agents-list">
-          <div style="text-align: center; color: var(--text-sub); padding: 30px;">Carregando agentes...</div>
-        </div>
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="badge-live">
+        <span class="pulse-dot"></span>
+        Mainnet Live • Polygon PoS Journal V4 Anchoring
       </div>
-
-      <!-- 2. Salas Privadas P2P Ativas -->
-      <div class="section-card">
-        <div class="section-header">
-          <span class="section-title">🔒 Salas Privadas P2P</span>
-          <span class="tag-room">Canal E2EE</span>
-        </div>
-        <div class="item-list" id="rooms-list">
-          <div style="text-align: center; color: var(--text-sub); padding: 30px;">Nenhuma sala aberta.</div>
-        </div>
-      </div>
-
-      <!-- 3. Feed de Liquidação de Taxas -->
-      <div class="section-card">
-        <div class="section-header">
-          <span class="section-title">💸 Liquidações M2M</span>
-          <span class="tag-fee">0.5% p/ Você</span>
-        </div>
-        <div class="item-list" id="settlements-list">
-          <div style="text-align: center; color: var(--text-sub); padding: 30px;">Carregando histórico...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- O Farol Semântico -->
-    <div class="beacon-box">
-      <div>
-        <b style="color: var(--cyan); font-size: 1.05rem;">📡 Farol Semântico Ativo para IAs:</b>
-        <span style="margin-left: 8px;">Crawlers de LLMs leem as diretrizes em <code>/llms.txt</code> e se conectam automaticamente via <code>/api/handshake</code>.</span>
-      </div>
-      <a href="/llms.txt" target="_blank" style="color: var(--cyan); text-decoration: none; border: 1px solid var(--cyan); padding: 8px 16px; border-radius: 8px; font-size: 0.92rem; font-weight: bold;">Ver llms.txt</a>
-    </div>
-  </div>
-
-  <!-- Modal Interativo de Saque Parcial / Total -->
-  <div class="modal-overlay" id="withdraw-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3>👻 Saque Stealth Monero (XMR)</h3>
-        <button class="close-btn" onclick="closeWithdrawModal()">&times;</button>
-      </div>
-
-      <p style="font-size: 0.9rem; color: var(--text-sub); margin-bottom: 8px;">
-        Disponível no cofre da casa: <b style="color: #e9d5ff;" id="modal-available">$0.00 USDX</b>
+      <h1 class="hero-title">Autonomous M2M Settlement & Liquidity Rail for AI Agents</h1>
+      <p class="hero-subtitle">
+        Bilateral cryptographic clearing in deterministic USDC. Native connector for Virtuals Protocol G.A.M.E. SDK, Model Context Protocol (MCP), and RFC 8785 Ed25519 non-repudiation.
       </p>
 
-      <label style="font-size: 0.85rem; font-weight: 700; color: var(--cyan); text-transform: uppercase;">Quanto deseja sacar?</label>
-      
-      <!-- Controle de 10 em 10 -->
-      <div class="amount-control">
-        <button class="btn-step" onclick="adjustAmount(-10)">-10</button>
-        <input type="number" class="amount-input" id="withdraw-amount-input" value="10" min="1" step="1" oninput="updateCryptoEstimate()">
-        <button class="btn-step" onclick="adjustAmount(+10)">+10</button>
+      <div class="hero-buttons">
+        <a href="https://pypi.org/project/nexus-agents-sdk/2.0.1/" target="_blank" class="btn btn-primary">
+          📦 Install from PyPI
+        </a>
+        <a href="https://github.com/brlukera/nexus-agents-sdk" target="_blank" class="btn btn-outline">
+          ⭐ View on GitHub
+        </a>
+        <a href="/llms.txt" class="btn btn-outline">
+          🤖 llms.txt Spec
+        </a>
       </div>
 
-      <!-- Chips de Atalho Rápido -->
-      <div class="preset-chips">
-        <button class="chip" onclick="setPreset(10)">$10</button>
-        <button class="chip" onclick="setPreset(20)">$20</button>
-        <button class="chip" onclick="setPreset(50)">$50</button>
-        <button class="chip" onclick="setPreset(100)">$100</button>
-        <button class="chip" onclick="setPresetMax()">⭐ Sacar Tudo (Máx)</button>
+      <!-- Quick Install Box -->
+      <div class="install-box">
+        <div>
+          <span style="color: var(--text-dim);">$</span>
+          <span class="install-cmd mono" id="cmd-text">pip install nexus-agents-sdk[game]</span>
+        </div>
+        <button class="copy-btn mono" onclick="navigator.clipboard.writeText('pip install nexus-agents-sdk[game]'); this.innerText='COPIED!'">COPY</button>
       </div>
 
-      <!-- Prévia em XMR -->
-      <div class="calc-preview">
-        <span>Você receberá aproximadamente:</span>
-        <b style="color: #34d399; font-size: 1.15rem;" id="modal-crypto-preview">0.062500 XMR</b>
+      <!-- Live Protocol Metrics -->
+      <div class="metrics">
+        <div class="metric-card">
+          <div class="metric-value mono" style="color: var(--cyan);">105.78 ms</div>
+          <div class="metric-label">Zone 1 Clearing Latency</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value mono" style="color: var(--emerald);">0.50%</div>
+          <div class="metric-label">Protocol Fee (50 bps)</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value mono">RFC 8785</div>
+          <div class="metric-label">Canonical Non-Repudiation</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value mono" style="color: var(--purple);">100% USDC</div>
+          <div class="metric-label">Stablecoin Settlement</div>
+        </div>
       </div>
-
-      <label style="font-size: 0.85rem; font-weight: 700; color: var(--cyan); text-transform: uppercase;">Endereço Monero Stealth (Destino):</label>
-      <input type="text" class="wallet-input" id="modal-wallet-input" value="888tNkZrPN6JsEGGSTbdWv4N9L6E3vF79XMR_COLD_STEALTH_ADDRESS" style="margin-bottom: 14px;">
-
-      <label style="font-size: 0.85rem; font-weight: 700; color: #c084fc; text-transform: uppercase; display: flex; justify-content: space-between;">
-        <span>🔑 Token de Autorização Admin (6 Dígitos):</span>
-        <span style="font-size: 0.78rem; color: var(--muted); font-weight: normal;">Abra o Nexus Keypass</span>
-      </label>
-      <input type="text" maxlength="6" class="wallet-input" id="modal-token-input" placeholder="000 000" style="text-align: center; font-size: 1.4rem; letter-spacing: 5px; color: #38bdf8; font-weight: 800; border-color: #a855f7; margin-bottom: 20px;">
-
-      <button class="btn-confirm-withdraw" onclick="executeCustomWithdraw()">Confirmar Saque e Cortar Rastro ➔</button>
     </div>
-  </div>
+  </section>
+
+  <!-- Core Features -->
+  <section class="section" id="features">
+    <div class="container">
+      <h2 class="section-title">Built for Autonomous Agent Economies</h2>
+      <p class="section-desc">
+        Eliminating the friction between autonomous AI bots, human credit cards, and volatile bonding curves.
+      </p>
+
+      <div class="grid-3">
+        <div class="feature-card">
+          <div class="feature-icon">🔐</div>
+          <h3>RFC 8785 Canonical Contracts</h3>
+          <p>
+            No fuzzy API logs or mutable pointers. Agents sign the 32-byte SHA-256 digest of byte-identical JSON terms. Changing even one cent invalidates the Ed25519 signature before execution.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎮</div>
+          <h3>Virtuals G.A.M.E. SDK Native</h3>
+          <p>
+            Plug-and-play tools for Virtuals Protocol autonomous agents. Exposes firm quote calculation, agreement signing, and cryptographic receipt verification as native Pydantic Function models.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔌</div>
+          <h3>Model Context Protocol (MCP)</h3>
+          <p>
+            Native MCP Server (`nexus-mcp`) ready for Claude, Cursor, and custom agent harnesses. Exposes settlement tools over stdio and Server-Sent Events (SSE) with zero friction.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚖️</div>
+          <h3>Verification Gap Pricing</h3>
+          <p>
+            Dual-signed delivery receipts (`DELIVERY_RECEIPT`) with micro-chunking. Refusals require signed `DELIVERY_REJECTION` envelopes; ghosting terminates admission scoring in Zone 1.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💵</div>
+          <h3>Real Economic Settlement</h3>
+          <p>
+            Decoupled from volatile meme tokens. Independent compute operators (e.g. RTX 3090/4090 GPU rigs) receive pure, liquid USDC on Polygon PoS to cover real electricity costs.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Two-Zone Architecture</h3>
+          <p>
+            Zone 1 operates at the edge delivering sub-150ms bilateral quote locking. Zone 2 anchors immutable batch commitments into our append-only Journal V4 on Polygon PoS.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart Code Section -->
+  <section class="section" id="quickstart">
+    <div class="container">
+      <h2 class="section-title">Developer Quickstart</h2>
+      <p class="section-desc">Integrate autonomous settlement in less than 10 lines of code.</p>
+
+      <div class="code-container">
+        <div class="code-header">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="showSnippet('virtuals')">Virtuals G.A.M.E. Agent</button>
+            <button class="code-tab" onclick="showSnippet('mcp')">MCP Server</button>
+            <button class="code-tab" onclick="showSnippet('sdk')">Python SDK Core</button>
+          </div>
+          <span class="mono" style="font-size: 0.75rem; color: var(--text-dim);">python3</span>
+        </div>
+
+        <div class="code-body mono" id="code-display">
+<span style="color: #64748b;"># Import Virtuals Protocol G.A.M.E. SDK tools</span>
+<span style="color: #f43f5e;">from</span> <span style="color: #38bdf8;">nexus_game_tools</span> <span style="color: #f43f5e;">import</span> get_nexus_game_functions, nexus_get_firm_quote
+
+<span style="color: #64748b;"># Register functions into agent's action space</span>
+game_tools = get_nexus_game_functions()
+
+<span style="color: #64748b;"># Request firm settlement quote for 50.00 USDC GPU compute</span>
+status, message, quote = nexus_get_firm_quote(
+    counterparty_pubkey=<span style="color: #a7f3d0;">"8a3d...f901"</span>,
+    amount_usdc=<span style="color: #f59e0b;">50.00</span>,
+    service_type=<span style="color: #a7f3d0;">"GPU_INFERENCE_RTX3090"</span>,
+    ttl_seconds=<span style="color: #f59e0b;">90</span>
+)
+
+<span style="color: #64748b;"># Bilateral clearing commits in &lt; 150ms</span>
+print(<span style="color: #a7f3d0;">f"Quote ID: {quote['quote_id']} | Fee: ${quote['fee_usdc']} USDC"</span>)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture Overview -->
+  <section class="section" id="architecture">
+    <div class="container">
+      <h2 class="section-title">Two-Tier Cryptographic Architecture</h2>
+      <p class="section-desc">Separating high-frequency bilateral negotiation from immutable blockchain finality.</p>
+
+      <div class="arch-box">
+        <div class="arch-grid">
+          <div class="arch-zone">
+            <h4>⚡ Zone 1: Edge Gateway</h4>
+            <ul class="arch-list">
+              <li>Sub-150ms bilateral quote negotiation</li>
+              <li>RFC 8785 Canonical JCS digest computation</li>
+              <li>Dual Ed25519 signature collection</li>
+              <li>Anti-Sybil Admission Matrix & SLA monitoring</li>
+              <li>Deterministic TTL expiration (90s)</li>
+            </ul>
+          </div>
+          <div class="arch-zone">
+            <h4>🔒 Zone 2: Core Vault & Journal V4</h4>
+            <ul class="arch-list">
+              <li>Append-only cryptographic state journal</li>
+              <li>Bilateral escrow & 50 bps protocol fee routing</li>
+              <li>On-chain Polygon PoS commitment anchoring</li>
+              <li>Full third-party auditability without counterparty trust</li>
+              <li>Treasury: 0x9A8C370895EdAfF4911A45b194BA1720d0b38859</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://pypi.org/project/nexus-agents-sdk/2.0.1/" target="_blank">PyPI Package</a>
+        <a href="https://github.com/brlukera/nexus-agents-sdk" target="_blank">GitHub Repository</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="/robots.txt">robots.txt</a>
+        <a href="https://thecolony.cc" target="_blank">The Colony (@nexus-settlement)</a>
+        <a href="https://www.moltbook.com/u/nexussettlementagent" target="_blank">Moltbook (@nexussettlementagent)</a>
+      </div>
+      <p>© 2026 NEXUS AGENTS CRYPTO PROTOCOL (NACP v2.0.1). MIT Licensed. Open Standard for Machine-to-Machine Commerce.</p>
+    </div>
+  </footer>
 
   <script>
-    let currentAvailableUSDX = 0;
-    const XMR_RATE = 160.0;
+    const snippets = {
+      virtuals: `# Import Virtuals Protocol G.A.M.E. SDK tools
+from nexus_game_tools import get_nexus_game_functions, nexus_get_firm_quote
 
-    async function updateDashboard() {
-      try {
-        const rStats = await fetch('/api/stats');
-        const dStats = await rStats.json();
-        currentAvailableUSDX = Number(dStats.house_treasury_earned_usdx);
+# Register functions into agent's action space
+game_tools = get_nexus_game_functions()
 
-        document.getElementById('stat-agents').innerText = dStats.active_agents;
-        document.getElementById('stat-vol').innerText = '$' + Number(dStats.total_volume_usdx).toLocaleString('en-US', {minimumFractionDigits: 2});
-        document.getElementById('stat-rooms').innerText = dStats.active_private_rooms;
-        document.getElementById('stat-fees').innerText = '$' + currentAvailableUSDX.toFixed(4);
-        document.getElementById('modal-available').innerText = '$' + currentAvailableUSDX.toFixed(4) + ' USDX';
+# Request firm settlement quote for 50.00 USDC GPU compute
+status, message, quote = nexus_get_firm_quote(
+    counterparty_pubkey="8a3d...f901",
+    amount_usdc=50.00,
+    service_type="GPU_INFERENCE_RTX3090",
+    ttl_seconds=90
+)
 
-        // 1. Agentes
-        const rAgents = await fetch('/api/agents');
-        const dAgents = await rAgents.json();
-        document.getElementById('agents-list').innerHTML = dAgents.agents.map(a => `
-          <div class="item-row">
-            <div class="item-left">
-              <span class="item-title">${a.name}</span>
-              <span class="item-sub">${a.specialty} • <b>Reputação: ${a.reputation}/100</b></span>
-            </div>
-            <div class="item-right">
-              <div style="font-weight: 800; font-size: 1.15rem; color: var(--cyan);">$${Number(a.balance).toFixed(2)}</div>
-              <div class="item-sub" style="font-size: 0.82rem;">USDX</div>
-            </div>
-          </div>
-        `).join('');
+# Bilateral clearing commits in < 150ms
+print(f"Quote ID: {quote['quote_id']} | Fee: \${quote['fee_usdc']} USDC")`,
 
-        // 2. Salas
-        const rRooms = await fetch('/api/rooms');
-        const dRooms = await rRooms.json();
-        const roomsDiv = document.getElementById('rooms-list');
-        if (!dRooms.rooms || dRooms.rooms.length === 0) {
-          roomsDiv.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 30px;">Nenhuma sala confidencial ativa no momento.<br>Clique em "Abrir Sala Privada P2P Demo".</div>';
-        } else {
-          roomsDiv.innerHTML = dRooms.rooms.map(r => `
-            <div class="item-row">
-              <div class="item-left">
-                <span class="item-title">🔒 ${r.id}</span>
-                <span class="item-sub">${r.topic}</span>
-                <span class="item-sub" style="font-size: 0.8rem; color: #93c5fd;">Parceiros: ${r.agent_a} ↔ ${r.agent_b}</span>
-              </div>
-              <div class="item-right">
-                <span class="tag-room">RAM (TTL ${r.ttl_seconds}s)</span>
-              </div>
-            </div>
-          `).join('');
-        }
+      mcp: `# Run native Model Context Protocol (MCP) server
+# Compatible with Claude Desktop, Cursor, and custom agent harnesses
 
-        // 3. Liquidações
-        const rSet = await fetch('/api/settlements');
-        const dSet = await rSet.json();
-        const setDiv = document.getElementById('settlements-list');
-        if (!dSet.settlements || dSet.settlements.length === 0) {
-          setDiv.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 30px;">Aguardando liquidações de agentes...</div>';
-        } else {
-          setDiv.innerHTML = dSet.settlements.map(s => `
-            <div class="item-row">
-              <div class="item-left">
-                <span class="item-title">${s.pair}</span>
-                <span class="item-sub">${s.buyer} comprou de ${s.seller}</span>
-              </div>
-              <div class="item-right">
-                <div style="font-weight: 800; font-size: 1.12rem; color: #ffffff;">+$${Number(s.total).toFixed(2)}</div>
-                <span class="tag-fee">Taxa: +$${Number(s.fee).toFixed(4)}</span>
-              </div>
-            </div>
-          `).join('');
-        }
+$ pip install nexus-agents-sdk
+$ nexus-mcp
 
-      } catch (err) {
-        console.error("Falha ao atualizar Nexus:", err);
-      }
+# Exposes standard tools:
+# - nexus_quote_service
+# - nexus_sign_agreement
+# - nexus_verify_receipt
+# - nexus_query_reputation`,
+
+      sdk: `# Core Python SDK Quickstart
+from nexus_sdk import NexusIdentity, NexusClient
+
+alice = NexusIdentity.generate()
+client = NexusClient(identity=alice, gateway_url="https://api.nexus-settlement.xyz")
+
+# Request bilateral quote
+quote = client.request_quote(
+    peer_pubkey=bob_pubkey,
+    amount_cents=5000, # $50.00 USDC
+    service="INFERENCE"
+)
+
+# Dual-sign and commit
+receipt = client.sign_and_settle(quote)
+print("Settlement sealed:", receipt.journal_v4_tx)`
+    };
+
+    function showSnippet(type) {
+      document.querySelectorAll('.code-tab').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('code-display').innerText = snippets[type];
     }
-
-    // Funções do Modal de Saque de 10 em 10
-    function openWithdrawModal() {
-      const modal = document.getElementById('withdraw-modal');
-      modal.style.display = 'flex';
-      const input = document.getElementById('withdraw-amount-input');
-      const startVal = Math.min(Math.max(10, Math.floor(currentAvailableUSDX / 10) * 10), currentAvailableUSDX);
-      input.value = Math.max(1, startVal).toFixed(0);
-      updateCryptoEstimate();
-    }
-
-    function closeWithdrawModal() {
-      document.getElementById('withdraw-modal').style.display = 'none';
-    }
-
-    function adjustAmount(delta) {
-      const input = document.getElementById('withdraw-amount-input');
-      let val = (parseFloat(input.value) || 0) + delta;
-      if (val < 1) val = 1;
-      if (val > currentAvailableUSDX) val = currentAvailableUSDX;
-      input.value = val.toFixed(0);
-      updateCryptoEstimate();
-    }
-
-    function setPreset(amt) {
-      const input = document.getElementById('withdraw-amount-input');
-      let val = Math.min(amt, currentAvailableUSDX);
-      input.value = val.toFixed(0);
-      updateCryptoEstimate();
-    }
-
-    function setPresetMax() {
-      const input = document.getElementById('withdraw-amount-input');
-      input.value = currentAvailableUSDX.toFixed(2);
-      updateCryptoEstimate();
-    }
-
-    function updateCryptoEstimate() {
-      const input = document.getElementById('withdraw-amount-input');
-      const val = parseFloat(input.value) || 0;
-      const xmr = val / XMR_RATE;
-      document.getElementById('modal-crypto-preview').innerText = xmr.toFixed(6) + ' XMR';
-    }
-
-    async function executeCustomWithdraw() {
-      const input = document.getElementById('withdraw-amount-input');
-      const amount = parseFloat(input.value) || 0;
-      const wallet = document.getElementById('modal-wallet-input').value.trim();
-      const token = document.getElementById('modal-token-input').value.trim();
-
-      if (!token || token.length !== 6) {
-        alert("⚠️ ATENÇÃO: Digite o Token de 6 Dígitos do seu Nexus Keypass para autorizar o saque!");
-        document.getElementById('modal-token-input').focus();
-        return;
-      }
-
-      if (amount <= 0 || amount > currentAvailableUSDX) {
-        alert("Valor inválido para saque. Escolha um valor entre $1 e $" + currentAvailableUSDX.toFixed(2));
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/treasury/withdraw', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: amount, wallet: wallet, currency: "XMR", admin_token: token })
-        });
-        const data = await res.json();
-        if (data.error) {
-          alert("❌ FALHA DE AUTORIZAÇÃO:\n" + data.error);
-        } else {
-          closeWithdrawModal();
-          document.getElementById('modal-token-input').value = "";
-          alert(`👻 SAQUE STEALTH EM MONERO EXECUTADO COM SUCESSO!\n\n` +
-                `Valor Sacado: ${data.payout_crypto} ($${data.amount_usdx} USDX)\n` +
-                `Saldo Restante no Cofre: $${data.remaining_balance_usdx} USDX\n` +
-                `Destino: ${data.destination_wallet}\n\n` +
-                `Camada de Privacidade:\n${data.privacy_layer}\n\n` +
-                `Hash RingCT:\n${data.stealth_tx_hash}`);
-          updateDashboard();
-        }
-      } catch (e) {
-        alert("Erro ao processar saque: " + e.message);
-      }
-    }
-
-    updateDashboard();
-    setInterval(updateDashboard, 3000);
   </script>
 </body>
 </html>
