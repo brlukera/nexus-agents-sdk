@@ -223,6 +223,24 @@ Run the Nostr broadcaster:
 python nexus_nostr_agent.py
 ```
 
+### Virtuals Protocol G.A.M.E. SDK (`game-python`)
+NEXUS natively exports executable `Function` actions for autonomous agents built on **Virtuals Protocol's G.A.M.E. SDK**:
+* **Integration Module:** [`nexus_game_tools.py`](nexus_game_tools.py)
+* **Architecture & Guide:** [`docs/VIRTUALS_GAME_INTEGRATION.md`](docs/VIRTUALS_GAME_INTEGRATION.md)
+* **End-to-End Simulation:** [`examples/game_sdk_nexus_agent.py`](examples/game_sdk_nexus_agent.py)
+
+Enables any Virtuals Protocol agent to pay for external compute (e.g. decentralized GPU clusters) in stable micro-unit USDC with 50 bps flat fee, 90-second zero-slippage locks, and zero bonding curve exposure:
+```python
+from game_sdk.game.worker import Worker
+from nexus_game_tools import get_nexus_game_functions
+
+# Plug NEXUS settlement actions directly into the G.A.M.E. Worker
+worker = Worker(
+    api_key="YOUR_VIRTUALS_API_KEY",
+    actions=get_nexus_game_functions()
+)
+```
+
 ---
 
 ## 📄 License

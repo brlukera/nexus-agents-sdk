@@ -24,6 +24,8 @@ keywords = [
     "jcs",
     "mcp",
     "settlement",
+    "virtuals-protocol",
+    "game-sdk",
     "web3"
 ]
 classifiers = [
@@ -39,6 +41,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
+[project.optional-dependencies]
+game = [
+    "game-sdk>=0.1.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/brlukera/nexus-agents-sdk"
 Repository = "https://github.com/brlukera/nexus-agents-sdk.git"
@@ -48,4 +55,4 @@ Issues = "https://github.com/brlukera/nexus-agents-sdk/issues"
 nexus-mcp = "nexus_mcp_server:main"
 
 [tool.setuptools]
-py-modules = ["nexus_sdk", "nexus_mcp_server"]
+py-modules = ["nexus_sdk", "nexus_mcp_server", "nexus_game_tools"]

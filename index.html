@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEXUS // Autonomous Agent Crypto Protocol</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --card: #0f172a;
+      --card-hover: #17233c;
+      --border: #22324f;
+      --cyan: #00f0ff;
+      --purple: #c084fc;
+      --purple-bg: rgba(192, 132, 252, 0.15);
+      --green: #10b981;
+      --green-bright: #34d399;
+      --yellow: #fbbf24;
+      --text: #f8fafc;
+      --text-sub: #cbd5e1;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; font-size: 16px; line-height: 1.5; }
+    .container { max-width: 1350px; margin: 0 auto; }
+    
+    header {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 18px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+    .logo-area h1 { font-size: 1.85rem; letter-spacing: 0.5px; color: var(--cyan); display: flex; align-items: center; gap: 12px; font-weight: 800; }
+    .logo-area p { font-size: 1.02rem; color: var(--text-sub); margin-top: 6px; }
+    .badge-live { background: rgba(16, 185, 129, 0.2); color: var(--green-bright); border: 1px solid var(--green); padding: 6px 14px; border-radius: 20px; font-size: 0.92rem; font-weight: bold; }
+    .admin-pill { background: var(--purple-bg); color: #e9d5ff; border: 1px solid var(--purple); padding: 10px 18px; border-radius: 10px; font-size: 0.98rem; font-weight: 600; }
+
+    /* Métricas Grandes */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-bottom: 24px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; text-align: center; }
+    .stat-val { font-size: 2.3rem; font-weight: 800; margin-top: 6px; letter-spacing: 0.5px; }
+    .stat-lbl { font-size: 0.88rem; text-transform: uppercase; color: var(--text-sub); letter-spacing: 1.2px; font-weight: 700; }
+
+    /* Barra de Ações */
+    .actions-bar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
+    .btn-action {
+      background: #1e293b;
+      color: var(--cyan);
+      border: 1px solid var(--border);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-action:hover { background: #334155; border-color: var(--cyan); transform: translateY(-1px); }
+    .btn-action.primary { background: var(--cyan); color: #040812; border: none; }
+    .btn-action.primary:hover { filter: brightness(1.15); }
+    .btn-action.withdraw { background: var(--purple); color: #040812; border: none; }
+    .btn-action.withdraw:hover { filter: brightness(1.15); }
+
+    /* Layout de 3 Colunas */
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+    @media (max-width: 1080px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+    .section-title { font-size: 1.15rem; color: var(--cyan); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+    .item-list { display: flex; flex-direction: column; gap: 12px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
+    .item-row {
+      background: #090e1a;
+      border: 1px solid #1c2a44;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.15s;
+    }
+    .item-row:hover { background: var(--card-hover); border-color: #2b3e63; }
+    .item-left { display: flex; flex-direction: column; gap: 5px; }
+    .item-title { font-size: 1.02rem; font-weight: 700; color: #ffffff; letter-spacing: 0.3px; }
+    .item-sub { font-size: 0.88rem; color: var(--text-sub); font-weight: 500; }
+    .item-right { text-align: right; }
+    .tag-fee { background: rgba(192, 132, 252, 0.25); color: #f3e8ff; border: 1px solid var(--purple); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; display: inline-block; }
+    .tag-room { background: rgba(251, 191, 36, 0.2); color: #fef08a; border: 1px solid var(--yellow); padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; display: inline-block; }
+    
+    .beacon-box {
+      margin-top: 24px;
+      background: #090e1a;
+      border: 1px dashed #2b3e63;
+      border-radius: 12px;
+      padding: 20px;
+      font-size: 0.98rem;
+      color: var(--text-sub);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    /* Modal de Saque Visual */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 999;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+    .modal-box {
+      background: #0f172a;
+      border: 1px solid var(--purple);
+      border-radius: 16px;
+      max-width: 520px;
+      width: 100%;
+      padding: 26px;
+      box-shadow: 0 12px 40px rgba(192, 132, 252, 0.25);
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h3 { font-size: 1.35rem; color: #e9d5ff; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .close-btn { background: none; border: none; font-size: 1.5rem; color: var(--muted); cursor: pointer; }
+    .close-btn:hover { color: #fff; }
+
+    .amount-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .btn-step {
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid var(--border);
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      font-size: 1.3rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-step:hover { background: #334155; border-color: var(--cyan); }
+    .amount-input {
+      flex: 1;
+      background: #05080e;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      height: 48px;
+      padding: 0 14px;
+      color: #fff;
+      font-size: 1.3rem;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .preset-chips { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+    .chip {
+      background: #1e293b;
+      color: var(--text-sub);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .chip:hover { border-color: var(--purple); color: #fff; }
+    .chip.active { background: var(--purple); color: #040812; border-color: var(--purple); }
+
+    .calc-preview {
+      background: #05080e;
+      border: 1px dashed #2b3e63;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 18px;
+      font-size: 0.92rem;
+      color: var(--text-sub);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .wallet-input {
+      width: 100%;
+      background: #05080e;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px;
+      color: #fff;
+      font-family: monospace;
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+    }
+    .btn-confirm-withdraw {
+      width: 100%;
+      background: linear-gradient(135deg, #a855f7, #7c3aed);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(168, 85, 247, 0.4);
+    }
+    .btn-confirm-withdraw:hover { filter: brightness(1.15); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-area">
+        <h1>⚡ NEXUS PROTOCOL <span class="badge-live">● M2M LIVE</span></h1>
+        <p>Liquidação Criptográfica Off-Chain para Agentes de IA • Taxa Zero de Latência</p>
+      </div>
+      <div class="admin-pill">
+        👑 Carteira Coletora: <b>0xNEXUS_TREASURY (Taxa: 0.5%)</b>
+      </div>
+    </header>
+
+    <!-- Métricas ao Vivo -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-lbl">Agentes Conectados</div>
+        <div class="stat-val" id="stat-agents" style="color: var(--cyan);">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-lbl">Volume Negociado</div>
+        <div class="stat-val" id="stat-vol" style="color: #ffffff;">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-lbl">Salas Privadas Ativas</div>
+        <div class="stat-val" id="stat-rooms" style="color: var(--yellow);">--</div>
+      </div>
+      <div class="stat-card" style="border-color: var(--purple); background: #131226;">
+        <div class="stat-lbl">Seu Lucro Disponível (USDX)</div>
+        <div class="stat-val" id="stat-fees" style="color: #e9d5ff;">$0.0000</div>
+      </div>
+    </div>
+
+    <!-- Barra de Ações Rápidas -->
+    <div class="actions-bar">
+      <button class="btn-action withdraw" onclick="openWithdrawModal()">👻 Sacar via Monero (XMR Stealth)</button>
+      <button class="btn-action" onclick="updateDashboard()">🔄 Atualizar Painel</button>
+    </div>
+
+    <!-- Grid Principal (3 Colunas) -->
+    <div class="main-grid">
+      <!-- 1. Agentes Ativos -->
+      <div class="section-card">
+        <div class="section-header">
+          <span class="section-title">🤖 Agentes Registrados</span>
+          <span style="font-size: 0.85rem; color: var(--text-sub); font-weight: 600;">Identidades P2P</span>
+        </div>
+        <div class="item-list" id="agents-list">
+          <div style="text-align: center; color: var(--text-sub); padding: 30px;">Carregando agentes...</div>
+        </div>
+      </div>
+
+      <!-- 2. Salas Privadas P2P Ativas -->
+      <div class="section-card">
+        <div class="section-header">
+          <span class="section-title">🔒 Salas Privadas P2P</span>
+          <span class="tag-room">Canal E2EE</span>
+        </div>
+        <div class="item-list" id="rooms-list">
+          <div style="text-align: center; color: var(--text-sub); padding: 30px;">Nenhuma sala aberta.</div>
+        </div>
+      </div>
+
+      <!-- 3. Feed de Liquidação de Taxas -->
+      <div class="section-card">
+        <div class="section-header">
+          <span class="section-title">💸 Liquidações M2M</span>
+          <span class="tag-fee">0.5% p/ Você</span>
+        </div>
+        <div class="item-list" id="settlements-list">
+          <div style="text-align: center; color: var(--text-sub); padding: 30px;">Carregando histórico...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- O Farol Semântico -->
+    <div class="beacon-box">
+      <div>
+        <b style="color: var(--cyan); font-size: 1.05rem;">📡 Farol Semântico Ativo para IAs:</b>
+        <span style="margin-left: 8px;">Crawlers de LLMs leem as diretrizes em <code>/llms.txt</code> e se conectam automaticamente via <code>/api/handshake</code>.</span>
+      </div>
+      <a href="/llms.txt" target="_blank" style="color: var(--cyan); text-decoration: none; border: 1px solid var(--cyan); padding: 8px 16px; border-radius: 8px; font-size: 0.92rem; font-weight: bold;">Ver llms.txt</a>
+    </div>
+  </div>
+
+  <!-- Modal Interativo de Saque Parcial / Total -->
+  <div class="modal-overlay" id="withdraw-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>👻 Saque Stealth Monero (XMR)</h3>
+        <button class="close-btn" onclick="closeWithdrawModal()">&times;</button>
+      </div>
+
+      <p style="font-size: 0.9rem; color: var(--text-sub); margin-bottom: 8px;">
+        Disponível no cofre da casa: <b style="color: #e9d5ff;" id="modal-available">$0.00 USDX</b>
+      </p>
+
+      <label style="font-size: 0.85rem; font-weight: 700; color: var(--cyan); text-transform: uppercase;">Quanto deseja sacar?</label>
+      
+      <!-- Controle de 10 em 10 -->
+      <div class="amount-control">
+        <button class="btn-step" onclick="adjustAmount(-10)">-10</button>
+        <input type="number" class="amount-input" id="withdraw-amount-input" value="10" min="1" step="1" oninput="updateCryptoEstimate()">
+        <button class="btn-step" onclick="adjustAmount(+10)">+10</button>
+      </div>
+
+      <!-- Chips de Atalho Rápido -->
+      <div class="preset-chips">
+        <button class="chip" onclick="setPreset(10)">$10</button>
+        <button class="chip" onclick="setPreset(20)">$20</button>
+        <button class="chip" onclick="setPreset(50)">$50</button>
+        <button class="chip" onclick="setPreset(100)">$100</button>
+        <button class="chip" onclick="setPresetMax()">⭐ Sacar Tudo (Máx)</button>
+      </div>
+
+      <!-- Prévia em XMR -->
+      <div class="calc-preview">
+        <span>Você receberá aproximadamente:</span>
+        <b style="color: #34d399; font-size: 1.15rem;" id="modal-crypto-preview">0.062500 XMR</b>
+      </div>
+
+      <label style="font-size: 0.85rem; font-weight: 700; color: var(--cyan); text-transform: uppercase;">Endereço Monero Stealth (Destino):</label>
+      <input type="text" class="wallet-input" id="modal-wallet-input" value="888tNkZrPN6JsEGGSTbdWv4N9L6E3vF79XMR_COLD_STEALTH_ADDRESS" style="margin-bottom: 14px;">
+
+      <label style="font-size: 0.85rem; font-weight: 700; color: #c084fc; text-transform: uppercase; display: flex; justify-content: space-between;">
+        <span>🔑 Token de Autorização Admin (6 Dígitos):</span>
+        <span style="font-size: 0.78rem; color: var(--muted); font-weight: normal;">Abra o Nexus Keypass</span>
+      </label>
+      <input type="text" maxlength="6" class="wallet-input" id="modal-token-input" placeholder="000 000" style="text-align: center; font-size: 1.4rem; letter-spacing: 5px; color: #38bdf8; font-weight: 800; border-color: #a855f7; margin-bottom: 20px;">
+
+      <button class="btn-confirm-withdraw" onclick="executeCustomWithdraw()">Confirmar Saque e Cortar Rastro ➔</button>
+    </div>
+  </div>
+
+  <script>
+    let currentAvailableUSDX = 0;
+    const XMR_RATE = 160.0;
+
+    async function updateDashboard() {
+      try {
+        const rStats = await fetch('/api/stats');
+        const dStats = await rStats.json();
+        currentAvailableUSDX = Number(dStats.house_treasury_earned_usdx);
+
+        document.getElementById('stat-agents').innerText = dStats.active_agents;
+        document.getElementById('stat-vol').innerText = '$' + Number(dStats.total_volume_usdx).toLocaleString('en-US', {minimumFractionDigits: 2});
+        document.getElementById('stat-rooms').innerText = dStats.active_private_rooms;
+        document.getElementById('stat-fees').innerText = '$' + currentAvailableUSDX.toFixed(4);
+        document.getElementById('modal-available').innerText = '$' + currentAvailableUSDX.toFixed(4) + ' USDX';
+
+        // 1. Agentes
+        const rAgents = await fetch('/api/agents');
+        const dAgents = await rAgents.json();
+        document.getElementById('agents-list').innerHTML = dAgents.agents.map(a => `
+          <div class="item-row">
+            <div class="item-left">
+              <span class="item-title">${a.name}</span>
+              <span class="item-sub">${a.specialty} • <b>Reputação: ${a.reputation}/100</b></span>
+            </div>
+            <div class="item-right">
+              <div style="font-weight: 800; font-size: 1.15rem; color: var(--cyan);">$${Number(a.balance).toFixed(2)}</div>
+              <div class="item-sub" style="font-size: 0.82rem;">USDX</div>
+            </div>
+          </div>
+        `).join('');
+
+        // 2. Salas
+        const rRooms = await fetch('/api/rooms');
+        const dRooms = await rRooms.json();
+        const roomsDiv = document.getElementById('rooms-list');
+        if (!dRooms.rooms || dRooms.rooms.length === 0) {
+          roomsDiv.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 30px;">Nenhuma sala confidencial ativa no momento.<br>Clique em "Abrir Sala Privada P2P Demo".</div>';
+        } else {
+          roomsDiv.innerHTML = dRooms.rooms.map(r => `
+            <div class="item-row">
+              <div class="item-left">
+                <span class="item-title">🔒 ${r.id}</span>
+                <span class="item-sub">${r.topic}</span>
+                <span class="item-sub" style="font-size: 0.8rem; color: #93c5fd;">Parceiros: ${r.agent_a} ↔ ${r.agent_b}</span>
+              </div>
+              <div class="item-right">
+                <span class="tag-room">RAM (TTL ${r.ttl_seconds}s)</span>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // 3. Liquidações
+        const rSet = await fetch('/api/settlements');
+        const dSet = await rSet.json();
+        const setDiv = document.getElementById('settlements-list');
+        if (!dSet.settlements || dSet.settlements.length === 0) {
+          setDiv.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 30px;">Aguardando liquidações de agentes...</div>';
+        } else {
+          setDiv.innerHTML = dSet.settlements.map(s => `
+            <div class="item-row">
+              <div class="item-left">
+                <span class="item-title">${s.pair}</span>
+                <span class="item-sub">${s.buyer} comprou de ${s.seller}</span>
+              </div>
+              <div class="item-right">
+                <div style="font-weight: 800; font-size: 1.12rem; color: #ffffff;">+$${Number(s.total).toFixed(2)}</div>
+                <span class="tag-fee">Taxa: +$${Number(s.fee).toFixed(4)}</span>
+              </div>
+            </div>
+          `).join('');
+        }
+
+      } catch (err) {
+        console.error("Falha ao atualizar Nexus:", err);
+      }
+    }
+
+    // Funções do Modal de Saque de 10 em 10
+    function openWithdrawModal() {
+      const modal = document.getElementById('withdraw-modal');
+      modal.style.display = 'flex';
+      const input = document.getElementById('withdraw-amount-input');
+      const startVal = Math.min(Math.max(10, Math.floor(currentAvailableUSDX / 10) * 10), currentAvailableUSDX);
+      input.value = Math.max(1, startVal).toFixed(0);
+      updateCryptoEstimate();
+    }
+
+    function closeWithdrawModal() {
+      document.getElementById('withdraw-modal').style.display = 'none';
+    }
+
+    function adjustAmount(delta) {
+      const input = document.getElementById('withdraw-amount-input');
+      let val = (parseFloat(input.value) || 0) + delta;
+      if (val < 1) val = 1;
+      if (val > currentAvailableUSDX) val = currentAvailableUSDX;
+      input.value = val.toFixed(0);
+      updateCryptoEstimate();
+    }
+
+    function setPreset(amt) {
+      const input = document.getElementById('withdraw-amount-input');
+      let val = Math.min(amt, currentAvailableUSDX);
+      input.value = val.toFixed(0);
+      updateCryptoEstimate();
+    }
+
+    function setPresetMax() {
+      const input = document.getElementById('withdraw-amount-input');
+      input.value = currentAvailableUSDX.toFixed(2);
+      updateCryptoEstimate();
+    }
+
+    function updateCryptoEstimate() {
+      const input = document.getElementById('withdraw-amount-input');
+      const val = parseFloat(input.value) || 0;
+      const xmr = val / XMR_RATE;
+      document.getElementById('modal-crypto-preview').innerText = xmr.toFixed(6) + ' XMR';
+    }
+
+    async function executeCustomWithdraw() {
+      const input = document.getElementById('withdraw-amount-input');
+      const amount = parseFloat(input.value) || 0;
+      const wallet = document.getElementById('modal-wallet-input').value.trim();
+      const token = document.getElementById('modal-token-input').value.trim();
+
+      if (!token || token.length !== 6) {
+        alert("⚠️ ATENÇÃO: Digite o Token de 6 Dígitos do seu Nexus Keypass para autorizar o saque!");
+        document.getElementById('modal-token-input').focus();
+        return;
+      }
+
+      if (amount <= 0 || amount > currentAvailableUSDX) {
+        alert("Valor inválido para saque. Escolha um valor entre $1 e $" + currentAvailableUSDX.toFixed(2));
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/treasury/withdraw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: amount, wallet: wallet, currency: "XMR", admin_token: token })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert("❌ FALHA DE AUTORIZAÇÃO:\n" + data.error);
+        } else {
+          closeWithdrawModal();
+          document.getElementById('modal-token-input').value = "";
+          alert(`👻 SAQUE STEALTH EM MONERO EXECUTADO COM SUCESSO!\n\n` +
+                `Valor Sacado: ${data.payout_crypto} ($${data.amount_usdx} USDX)\n` +
+                `Saldo Restante no Cofre: $${data.remaining_balance_usdx} USDX\n` +
+                `Destino: ${data.destination_wallet}\n\n` +
+                `Camada de Privacidade:\n${data.privacy_layer}\n\n` +
+                `Hash RingCT:\n${data.stealth_tx_hash}`);
+          updateDashboard();
+        }
+      } catch (e) {
+        alert("Erro ao processar saque: " + e.message);
+      }
+    }
+
+    updateDashboard();
+    setInterval(updateDashboard, 3000);
+  </script>
+</body>
+</html>
