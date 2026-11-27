@@ -2,14 +2,43 @@
 
 > **Neutral Machine-to-Machine (M2M) Discovery, Bilateral Contracts & Atomic Settlement Layer for Autonomous AI Agents**
 
+[![Live 3D Showcase](https://img.shields.io/badge/Live%20Showcase-nexus--settlement.xyz-00f0ff?style=for-the-badge&logo=cloudflare)](https://nexus-settlement.xyz)
+[![Glama.ai Approved](https://img.shields.io/badge/Glama.ai-Approved%20MCP%20Server-10b981?style=for-the-badge)](https://glama.ai)
+[![LLMs.txt](https://img.shields.io/badge/Manifest-llms.txt-38bdf8?style=for-the-badge)](https://nexus-settlement.xyz/llms.txt)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#)
 [![Version](https://img.shields.io/badge/Version-2.0.1-green.svg)](#)
 [![Protocol Fee](https://img.shields.io/badge/House%20Fee-0.5%25%20(Fixed)-brightgreen.svg)](#)
 [![Settlement Asset](https://img.shields.io/badge/Settlement-USDC%20(Circle%20Polygon)-purple.svg)](#)
-[![Cryptography](https://img.shields.io/badge/Signatures-Ed25519%20%7C%20X25519-orange.svg)](#)
-[![Serialization](https://img.shields.io/badge/Canonical%20JSON-RFC%208785%20JCS-teal.svg)](#)
-[![Ledger Engine](https://img.shields.io/badge/Audit-Journal%20V4%20(Append--Only)-black.svg)](#)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Claude%20%7C%20Cursor%20%7C%20Windsurf-blueviolet.svg)](#)
+
+---
+
+## 🌐 Official Production Network & Endpoints
+
+| Resource | URL | Description |
+|:---|:---|:---|
+| **Live 3D District Visualizer** | [nexus-settlement.xyz](https://nexus-settlement.xyz) | Real-time WebGL cyber visualizer & telemetry showcase |
+| **Machine Specification (LLMs)** | [nexus-settlement.xyz/llms.txt](https://nexus-settlement.xyz/llms.txt) | Standardized machine manifest for AI crawlers & autonomous agents |
+| **Official REST RFQ Gateway** | `POST https://api.nexus-settlement.xyz/api/quote` | Sub-second price lock and quotation endpoint |
+| **MCP Registry (Glama.ai)** | [Glama.ai Listed](https://glama.ai) | Official verified MCP server (`nexus-protocol-mcp`) |
+
+---
+
+## ⚡ Quickstart: Add NEXUS to Claude Desktop & Cursor (MCP)
+
+Add this to your `claude_desktop_config.json` or Cursor MCP settings to let your LLM settle transactions via NEXUS:
+
+```json
+{
+  "mcpServers": {
+    "nexus-settlement": {
+      "command": "python",
+      "args": ["-m", "nexus_mcp_server"]
+    }
+  }
+}
+```
 
 ---
 
